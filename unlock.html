@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCM 音乐解锁</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg: #0f0f1a; --card: #1a1a2e; --card2: #22223a; --border: #2a2a45; --text: #e0e0e0; --text2: #999; --accent: #6c5ce7; --accent2: #a29bfe; --green: #00cec9; --red: #e74c3c; --yellow: #fdcb6e; --orange: #e17055; --radius: 12px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; background-image: radial-gradient(ellipse at 20% 20%, rgba(108,92,231,.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(0,206,201,.06) 0%, transparent 60%); }
+.header { text-align: center; padding: 2rem 1rem .5rem; }
+.header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -.5px; background: linear-gradient(135deg, var(--accent2), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.header p { color: var(--text2); margin-top: .4rem; font-size: .9rem; }
+.container { max-width: 900px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+.drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 3rem 2rem; text-align: center; transition: all .3s; background: var(--card); cursor: pointer; }
+.drop-zone.dragover { border-color: var(--accent); background: rgba(108,92,231,.08); }
+.drop-zone .icon { font-size: 3rem; margin-bottom: .8rem; opacity: .6; }
+.drop-zone .title { font-size: 1.1rem; font-weight: 600; margin-bottom: .3rem; }
+.drop-zone .hint { font-size: .85rem; color: var(--text2); }
+.drop-zone input[type=file] { display: none; }
+.status-bar { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; padding: .8rem 1rem; background: var(--card); border-radius: var(--radius); font-size: .85rem; }
+.status-bar .count { font-weight: 600; color: var(--accent2); }
+.progress-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); border-radius: 3px; transition: width .3s; }
+.toolbar { display: flex; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+.toolbar button { padding: .6rem 1.2rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; font-size: .85rem; transition: all .2s; }
+.toolbar button:hover { border-color: var(--accent); color: var(--accent2); }
+.toolbar button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.toolbar button.primary:hover { background: #5b4cdb; }
+.toolbar button:disabled { opacity: .4; cursor: not-allowed; }
+.results { margin-top: 1rem; }
+.result-card { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem; background: var(--card); border-radius: var(--radius); margin-bottom: .6rem; border: 1px solid transparent; transition: all .2s; }
+.result-card:hover { border-color: var(--border); }
+.result-card .cover { width: 64px; height: 64px; border-radius: 8px; background: var(--card2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.result-card .cover img { width: 100%; height: 100%; object-fit: cover; }
+.result-card .cover .no-cover { font-size: 1.8rem; opacity: .3; }
+.result-card .info { flex: 1; min-width: 0; }
+.result-card .info .song-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1rem; }
+.result-card .info .song-meta { font-size: .78rem; color: var(--text2); margin-top: .3rem; display: flex; flex-wrap: wrap; gap: .15rem .8rem; }
+.result-card .info .song-meta .tag { display: inline-flex; align-items: center; gap: .15rem; }
+.result-card .info .song-meta .tag .tag-icon { opacity: .6; font-size: .7rem; }
+.result-card .right-info { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; flex-shrink: 0; }
+.result-card .badge { font-size: .7rem; padding: .2rem .6rem; border-radius: 4px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+.badge-success { background: rgba(0,206,201,.15); color: var(--green); }
+.badge-error { background: rgba(231,76,60,.15); color: var(--red); }
+.badge-working { background: rgba(253,203,110,.15); color: var(--yellow); }
+.result-card .size { font-size: .75rem; color: var(--text2); white-space: nowrap; }
+.result-card .actions { display: flex; gap: .4rem; }
+.result-card .actions button { padding: .45rem .8rem; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font-size: .78rem; transition: all .2s; white-space: nowrap; }
+.result-card .actions button:hover { border-color: var(--accent); color: var(--accent2); }
+.result-card .actions .btn-dl { background: var(--accent); border-color: var(--accent); color: #fff; }
+.result-card .actions .btn-dl:hover { background: #5b4cdb; }
+.footer { text-align: center; padding: 1rem; color: var(--text2); font-size: .75rem; }
+.footer a { color: var(--accent2); text-decoration: none; }
+.toast-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 9999; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
+.toast { padding: .8rem 1.2rem; border-radius: 8px; font-size: .85rem; animation: slideIn .3s ease; max-width: 400px; pointer-events: auto; }
+.toast.success { background: #00b894; color: #fff; }
+.toast.error { background: #e74c3c; color: #fff; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Metadata Detail */
+.meta-detail { background: var(--card2); border-radius: 8px; padding: .6rem 1rem; margin-top: .5rem; font-size: .75rem; display: none; }
+.meta-detail.show { display: block; }
+.meta-detail .meta-row { display: flex; padding: .15rem 0; }
+.meta-detail .meta-row .meta-k { color: var(--accent2); width: 70px; flex-shrink: 0; }
+.meta-detail .meta-row .meta-v { color: var(--text); word-break: break-all; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9998; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--card); border-radius: var(--radius); padding: 2rem; max-width: 500px; width: 90%; border: 1px solid var(--border); }
+.modal h3 { margin-bottom: 1rem; }
+.modal label { display: block; font-size: .85rem; color: var(--text2); margin-bottom: .3rem; }
+.modal input[type=text] { width: 100%; padding: .6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: .9rem; }
+.modal .tip { font-size: .75rem; color: var(--text2); margin-top: .3rem; }
+.modal .tip a { color: var(--accent2); }
+.modal .btns { display: flex; gap: .6rem; margin-top: 1.2rem; justify-content: flex-end; }
+.modal .btns button { padding: .6rem 1.2rem; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-size: .85rem; background: transparent; color: var(--text); }
+.modal .btns .btn-ok { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Settings notice */
+.settings-notice { display: flex; align-items: center; gap: .4rem; padding: .5rem .8rem; background: var(--card); border-radius: 8px; margin-top: 1rem; font-size: .82rem; }
+.settings-notice .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>NCM 音乐解锁</h1>
+  <p>在浏览器中解锁网易云音乐 .ncm 文件，完整保留元信息</p>
+</div>
+
+<div class="container">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📂</div>
+    <div class="title">点击选择或拖拽 .ncm 文件到此处</div>
+    <div class="hint">支持批量处理，所有运算均在本地完成，不会上传您的文件</div>
+    <input type="file" id="fileInput" multiple accept=".ncm">
+  </div>
+
+  <div class="status-bar" id="statusBar" style="display:none">
+    <span class="count" id="statusCount"></span>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="toolbar" id="toolbar" style="display:none">
+    <button class="primary" onclick="downloadAll()"> 全部下载</button>
+    <button onclick="clearAll()"> 清空列表</button>
+    <button onclick="openSettings()"> 解密设定</button>
+  </div>
+
+  <div class="settings-notice" id="hostNotice" style="display:none">
+    <span class="dot"></span>
+    <span>直接打开此HTML无法获取流派/年份等在线元数据。</span>
+    <strong style="margin-left:.5rem;cursor:pointer;color:var(--accent2)" onclick="showServerHint()">点击了解如何解决 →</strong>
+  </div>
+
+  <div class="results" id="results"></div>
+</div>
+
+<div class="footer">
+  所有运算均在本地浏览器完成，文件不会上传 &middot; NCM v2.1 &middot;
+  <a href="https://git.unlock-music.dev/um/web" target="_blank">参考 unlock-music</a>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+// ============================================================
+//  AES-128-ECB (Pure JS)
+// ============================================================
+const SBOX = new Uint8Array([0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16]);
+const INV_SBOX = new Uint8Array([0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,0x7c,0xe3,0x39,0x82,0x9b,0x2f,0xff,0x87,0x34,0x8e,0x43,0x44,0xc4,0xde,0xe9,0xcb,0x54,0x7b,0x94,0x32,0xa6,0xc2,0x23,0x3d,0xee,0x4c,0x95,0x0b,0x42,0xfa,0xc3,0x4e,0x08,0x2e,0xa1,0x66,0x28,0xd9,0x24,0xb2,0x76,0x5b,0xa2,0x49,0x6d,0x8b,0xd1,0x25,0x72,0xf8,0xf6,0x64,0x86,0x68,0x98,0x16,0xd4,0xa4,0x5c,0xcc,0x5d,0x65,0xb6,0x92,0x6c,0x70,0x48,0x50,0xfd,0xed,0xb9,0xda,0x5e,0x15,0x46,0x57,0xa7,0x8d,0x9d,0x84,0x90,0xd8,0xab,0x00,0x8c,0xbc,0xd3,0x0a,0xf7,0xe4,0x58,0x05,0xb8,0xb3,0x45,0x06,0xd0,0x2c,0x1e,0x8f,0xca,0x3f,0x0f,0x02,0xc1,0xaf,0xbd,0x03,0x01,0x13,0x8a,0x6b,0x3a,0x91,0x11,0x41,0x4f,0x67,0xdc,0xea,0x97,0xf2,0xcf,0xce,0xf0,0xb4,0xe6,0x73,0x96,0xac,0x74,0x22,0xe7,0xad,0x35,0x85,0xe2,0xf9,0x37,0xe8,0x1c,0x75,0xdf,0x6e,0x47,0xf1,0x1a,0x71,0x1d,0x29,0xc5,0x89,0x6f,0xb7,0x62,0x0e,0xaa,0x18,0xbe,0x1b,0xfc,0x56,0x3e,0x4b,0xc6,0xd2,0x79,0x20,0x9a,0xdb,0xc0,0xfe,0x78,0xcd,0x5a,0xf4,0x1f,0xdd,0xa8,0x33,0x88,0x07,0xc7,0x31,0xb1,0x12,0x10,0x59,0x27,0x80,0xec,0x5f,0x60,0x51,0x7f,0xa9,0x19,0xb5,0x4a,0x0d,0x2d,0xe5,0x7a,0x9f,0x93,0xc9,0x9c,0xef,0xa0,0xe0,0x3b,0x4d,0xae,0x2a,0xf5,0xb0,0xc8,0xeb,0xbb,0x3c,0x83,0x53,0x99,0x61,0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d]);
+
+function gmul(a,b){let p=0;for(let i=0;i<8;i++){if(b&1)p^=a;const hi=a&0x80;a=(a<<1)&0xff;if(hi)a^=0x1b;b>>=1}return p}
+function keyExpansion(key){const w=new Uint32Array(44);for(let i=0;i<4;i++)w[i]=(key[4*i]<<24)|(key[4*i+1]<<16)|(key[4*i+2]<<8)|key[4*i+3];const R=[0x01000000,0x02000000,0x04000000,0x08000000,0x10000000,0x20000000,0x40000000,0x80000000,0x1b000000,0x36000000];for(let i=4;i<44;i++){let t=w[i-1];if(i%4===0)t=((SBOX[(t>>>16)&0xff]<<24)|(SBOX[(t>>>8)&0xff]<<16)|(SBOX[t&0xff]<<8)|SBOX[(t>>>24)&0xff])^R[(i/4)-1];w[i]=w[i-4]^t}return w}
+function aesDecryptBlock(block,w){let s=new Uint32Array(4);for(let i=0;i<4;i++)s[i]=(block[4*i]<<24)|(block[4*i+1]<<16)|(block[4*i+2]<<8)|block[4*i+3];for(let i=0;i<4;i++)s[i]^=w[40+i];for(let r=9;r>=1;r--){let t=new Uint32Array(4);t[0]=(s[0]&0xff000000)|(s[3]&0x00ff0000)|(s[2]&0x0000ff00)|(s[1]&0x000000ff);t[1]=(s[1]&0xff000000)|(s[0]&0x00ff0000)|(s[3]&0x0000ff00)|(s[2]&0x000000ff);t[2]=(s[2]&0xff000000)|(s[1]&0x00ff0000)|(s[0]&0x0000ff00)|(s[3]&0x000000ff);t[3]=(s[3]&0xff000000)|(s[2]&0x00ff0000)|(s[1]&0x0000ff00)|(s[0]&0x000000ff);s=t;for(let i=0;i<4;i++)s[i]=(INV_SBOX[(s[i]>>>24)&0xff]<<24)|(INV_SBOX[(s[i]>>>16)&0xff]<<16)|(INV_SBOX[(s[i]>>>8)&0xff]<<8)|(INV_SBOX[s[i]&0xff]);for(let i=0;i<4;i++)s[i]^=w[r*4+i];for(let i=0;i<4;i++){const a0=(s[i]>>>24)&0xff,a1=(s[i]>>>16)&0xff,a2=(s[i]>>>8)&0xff,a3=s[i]&0xff;s[i]=(gmul(a0,0x0e)^gmul(a1,0x0b)^gmul(a2,0x0d)^gmul(a3,0x09))<<24|(gmul(a0,0x09)^gmul(a1,0x0e)^gmul(a2,0x0b)^gmul(a3,0x0d))<<16|(gmul(a0,0x0d)^gmul(a1,0x09)^gmul(a2,0x0e)^gmul(a3,0x0b))<<8|(gmul(a0,0x0b)^gmul(a1,0x0d)^gmul(a2,0x09)^gmul(a3,0x0e))}}let t=new Uint32Array(4);t[0]=(s[0]&0xff000000)|(s[3]&0x00ff0000)|(s[2]&0x0000ff00)|(s[1]&0x000000ff);t[1]=(s[1]&0xff000000)|(s[0]&0x00ff0000)|(s[3]&0x0000ff00)|(s[2]&0x000000ff);t[2]=(s[2]&0xff000000)|(s[1]&0x00ff0000)|(s[0]&0x0000ff00)|(s[3]&0x000000ff);t[3]=(s[3]&0xff000000)|(s[2]&0x00ff0000)|(s[1]&0x0000ff00)|(s[0]&0x000000ff);s=t;for(let i=0;i<4;i++)s[i]=(INV_SBOX[(s[i]>>>24)&0xff]<<24)|(INV_SBOX[(s[i]>>>16)&0xff]<<16)|(INV_SBOX[(s[i]>>>8)&0xff]<<8)|(INV_SBOX[s[i]&0xff]);for(let i=0;i<4;i++)s[i]^=w[i];const out=new Uint8Array(16);for(let i=0;i<4;i++){out[4*i]=(s[i]>>>24)&0xff;out[4*i+1]=(s[i]>>>16)&0xff;out[4*i+2]=(s[i]>>>8)&0xff;out[4*i+3]=s[i]&0xff}return out}
+function aesEcbDecrypt(data,keyBytes){const w=keyExpansion(keyBytes);const bc=Math.floor(data.length/16);const r=new Uint8Array(bc*16);for(let i=0;i<bc;i++)r.set(aesDecryptBlock(data.slice(i*16,(i+1)*16),w),i*16);const pl=r[r.length-1];if(pl>0&&pl<=16){let v=true;for(let i=1;i<=pl;i++)if(r[r.length-i]!==pl){v=false;break;}if(v)return r.slice(0,r.length-pl)}return r}
+function base64ToBytes(b64){const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';b64=b64.replace(/[^A-Za-z0-9+/=]/g,'');if(b64.length%4)b64+='='.repeat(4-b64.length%4);const o=[];for(let i=0;i<b64.length;i+=4){const a=c.indexOf(b64[i]),b=c.indexOf(b64[i+1]||'A'),d=c.indexOf(b64[i+2]||'A'),e=c.indexOf(b64[i+3]||'A');o.push((a<<2)|(b>>4));if(b64[i+2]!=='=')o.push(((b&15)<<4)|(d>>2));if(b64[i+3]!=='=')o.push(((d&3)<<6)|e)}return new Uint8Array(o)}
+
+// ============================================================
+//  ID3v2 Tag Parser (Pure JS) - Extracts all metadata from MP3
+// ============================================================
+function synchSafeToInt(b0,b1,b2,b3){return((b0&0x7f)<<21)|((b1&0x7f)<<18)|((b2&0x7f)<<11)|((b3&0x7f)<<4)|(0)}
+
+function parseID3v2(audioData){
+  const raw = new Uint8Array(audioData);
+  if(raw.length<10 || String.fromCharCode(raw[0],raw[1],raw[2])!=='ID3') return null;
+
+  const version = raw[3];
+  const flags = raw[5];
+  const tagSize = version===4 ? synchSafeToInt(raw[6],raw[7],raw[8],raw[9]) : ((raw[6]<<21)|(raw[7]<<14)|(raw[8]<<7)|raw[9]);
+
+  let pos = 10;
+  // Skip extended header if present (v2.4: bit 6; v2.3: bit 6)
+  if(version===4&&(flags&0x40)){ const ehSize=synchSafeToInt(raw[pos],raw[pos+1],raw[pos+2],raw[pos+3]); pos+=4+ehSize; }
+  else if(version===3&&(flags&0x40)){ const ehSize=(raw[pos]<<24)|(raw[pos+1]<<16)|(raw[pos+2]<<8)|raw[pos+3]; pos+=4+ehSize; }
+
+  const tags = {};
+  const endPos = 10 + tagSize;
+
+  while(pos+10 <= endPos && pos+10 <= raw.length){
+    const fId = String.fromCharCode(raw[pos],raw[pos+1],raw[pos+2],raw[pos+3]);
+    if(fId[0]==='\x00') break; // padding reached
+
+    let fSize;
+    if(version===4) fSize = synchSafeToInt(raw[pos+4],raw[pos+5],raw[pos+6],raw[pos+7]);
+    else fSize = (raw[pos+4]<<24)|(raw[pos+5]<<16)|(raw[pos+6]<<8)|raw[pos+7];
+
+    const fFlags = (raw[pos+8]<<8)|raw[pos+9];
+    pos += 10;
+
+    if(fSize<=0||pos+fSize>raw.length) break;
+
+    // Handle unsynchronization/data-length-indicator for v2.4
+    let dataStart = pos;
+    let dataLen = fSize;
+    if(version===4&&(fFlags&0x0001)){ // data length indicator
+      const dli = synchSafeToInt(raw[pos],raw[pos+1],raw[pos+2],raw[pos+3]);
+      dataStart = pos + 4;
+      dataLen = Math.min(dli, fSize - 4);
+    }
+
+    try {
+      const enc = raw[dataStart]; // text encoding byte
+      const bodyStart = dataStart + 1;
+      const bodyLen = dataLen - 1;
+
+      // Text frames: T***
+      if(fId[0]==='T'&&fId!=='TXXX'){
+        let val;
+        if(enc===0x01||enc===0x02){ // UTF-16
+          const bom = raw[bodyStart]===0xff&&raw[bodyStart+1]===0xfe ? 2 : 0;
+          val = new TextDecoder('utf-16le').decode(raw.slice(bodyStart+bom, bodyStart+bodyLen));
+        } else if(enc===0x03){ // UTF-8
+          val = new TextDecoder().decode(raw.slice(bodyStart, bodyStart+bodyLen));
+        } else { // ASCII/ISO-8859-1
+          val = new TextDecoder('iso-8859-1').decode(raw.slice(bodyStart, bodyStart+bodyLen));
+        }
+        val = val.replace(/\x00/g,'').trim();
+        if(val) tags[fId] = val;
+      }
+      // Comments
+      else if(fId==='COMM'){
+        let commentText = '';
+        if(enc===0x03) commentText = new TextDecoder().decode(raw.slice(bodyStart+3+raw[bodyStart+1]+raw[bodyStart+2], bodyStart+bodyLen));
+        else commentText = new TextDecoder('iso-8859-1').decode(raw.slice(bodyStart+3+raw[bodyStart+1]+raw[bodyStart+2], bodyStart+bodyLen));
+        commentText = commentText.replace(/\x00/g,'').trim();
+        if(commentText) tags.COMM = commentText;
+      }
+    } catch(e){}
+
+    pos += fSize;
+  }
+
+  // Map ID3v2 frame IDs to readable names
+  return {
+    title: tags.TIT2 || '',
+    artist: tags.TPE1 || '',
+    album: tags.TALB || '',
+    albumartist: tags.TPE2 || '',
+    year: tags.TYER || tags.TDRC || '',
+    genre: tags.TCON || '',
+    track: tags.TRCK || '',
+    disk: tags.TPOS || '',
+    composer: tags.TCOM || '',
+    publisher: tags.TPUB || '',
+    copyright: tags.TCOP || '',
+    comment: tags.COMM || '',
+    encodedby: tags.TENC || '',
+    lyricist: tags.TEXT || '',
+    bpm: tags.TBPM || '',
+    isrc: tags.TSRC || '',
+    // raw for debugging
+    _raw: tags
+  };
+}
+
+// ============================================================
+//  ID3v2 Tag Writer (Pure JS) - Writes all metadata to MP3
+// ============================================================
+function writeSynchSafe(num){
+  const b = new Uint8Array(4);
+  b[0] = (num>>21)&0x7f; b[1] = (num>>14)&0x7f; b[2] = (num>>7)&0x7f; b[3] = num&0x7f;
+  return b;
+}
+
+function makeTextFrame(id, text, encoding){
+  const enc = encoding || (text&&/[Ā-￿]/.test(text)?0x01:0x00);
+  let bytes;
+  if(enc===0x01){ // UTF-16LE with BOM
+    const bom = new Uint8Array([0xff,0xfe]);
+    const strBytes = new TextEncoder().encode(text);
+    // Convert UTF-8 to UTF-16LE
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    bytes = new Uint8Array(2+text.length*2);
+    bytes[0]=0xff;bytes[1]=0xfe;
+    for(let i=0;i<text.length;i++){
+      const code = text.charCodeAt(i);
+      bytes[2+i*2] = code&0xff;
+      bytes[2+i*2+1] = (code>>8)&0xff;
+    }
+  } else {
+    bytes = new Uint8Array(1+text.length);
+    bytes[0]=enc;
+    for(let i=0;i<text.length;i++) bytes[1+i] = text.charCodeAt(i)&0xff;
+  }
+  return { id, data: bytes };
+}
+
+function toSynchInt(num){ return((num&0x7f)<<21)|((num&0x7f)<<14)|((num&0x7f)<<7)|(num&0x7f); }
+
+function writeID3v2Tags(audioData, tags){
+  const enc = new TextEncoder();
+  const frames = [];
+
+  // Text frames
+  const textFrames = [
+    ['TIT2',tags.title], ['TPE1',tags.artist], ['TALB',tags.album],
+    ['TPE2',tags.albumartist], ['TYER',tags.year], ['TDRC',tags.year],
+    ['TCON',tags.genre], ['TRCK',tags.track], ['TPOS',tags.disk],
+    ['TCOM',tags.composer], ['TPUB',tags.publisher], ['TCOP',tags.copyright],
+    ['TENC',tags.encodedby], ['TEXT',tags.lyricist], ['TBPM',tags.bpm], ['TSRC',tags.isrc]
+  ];
+  for(const [id,val] of textFrames){
+    if(!val&&id!=='TRCK'&&id!=='TPOS') continue;
+    if(!val) continue;
+    // Handle track number like "3/12"
+    let text = String(val);
+    if(id==='TRCK'&&!String(val).includes('/')&&parseInt(val)>0) text = String(val);
+    frames.push(makeTextFrame(id, text));
+  }
+
+  // Comment frame
+  if(tags.comment){
+    const lang = 'eng';
+    const desc = 'Comment';
+    const commentBytes = new Uint8Array(1+3+desc.length+1+tags.comment.length);
+    commentBytes[0]=0x03; // UTF-8
+    commentBytes[1]=lang.charCodeAt(0);commentBytes[2]=lang.charCodeAt(1);commentBytes[3]=lang.charCodeAt(2);
+    let p=4;for(let i=0;i<desc.length;i++)commentBytes[p++]=desc.charCodeAt(i);commentBytes[p++]=0;
+    const txt = enc.encode(tags.comment);
+    commentBytes.set(txt, p);
+    frames.push({id:'COMM',data:commentBytes});
+  }
+
+  // APIC - cover image
+  if(tags.picture&&tags.picture.length>0){
+    let mime='image/jpeg';
+    if(tags.picture[0]===0x89&&tags.picture[1]===0x50)mime='image/png';
+    const mb=enc.encode(mime);
+    const db=enc.encode('Cover');
+    const apic=new Uint8Array(1+mb.length+1+1+db.length+1+tags.picture.length);
+    let ap=0;apic[ap++]=0x00;apic.set(mb,ap);ap+=mb.length;apic[ap++]=0x00;
+    apic[ap++]=0x03;apic.set(db,ap);ap+=db.length;apic[ap++]=0x00;
+    apic.set(tags.picture,ap);
+    frames.push({id:'APIC',data:apic});
+  }
+
+  if(frames.length===0) return audioData;
+
+  let totalSize=0;
+  for(const f of frames) totalSize+=10+f.data.length;
+
+  // Pad to reach a nice size
+  const padLen = (4096-(totalSize+10)%4096)%4096;
+  if(padLen>0) totalSize+=padLen;
+
+  const header = new Uint8Array(10);
+  header.set(enc.encode('ID3'),0);
+  header[3]=0x04; header[4]=0x00; header[5]=0x00;
+  header.set(writeSynchSafe(totalSize),6);
+
+  const result = new Uint8Array(10+totalSize+audioData.length);
+  result.set(header,0);
+  let off=10;
+  for(const f of frames){
+    const fh=new Uint8Array(10);
+    fh.set(enc.encode(f.id),0);
+    fh.set(writeSynchSafe(f.data.length),4);
+    fh[8]=0x00;fh[9]=0x00;
+    result.set(fh,off); off+=10;
+    result.set(f.data,off); off+=f.data.length;
+  }
+  // Padding
+  for(let i=0;i<padLen;i++)result[off++]=0x00;
+  result.set(audioData,off);
+  return result;
+}
+
+// ============================================================
+//  FLAC Metadata Writer (Pure JS)
+// ============================================================
+function writeFLACMeta(audioData, tags){
+  if(audioData[0]!==0x66||audioData[1]!==0x4c||audioData[2]!==0x61||audioData[3]!==0x43)return audioData;
+  let pos=4,lastBlock=false;
+  const blocks=[];
+  while(!lastBlock&&pos+4<=audioData.length){
+    const hdr=(audioData[pos]<<24)|(audioData[pos+1]<<16)|(audioData[pos+2]<<8)|audioData[pos+3];
+    lastBlock=(hdr>>31)&1;
+    const type=(hdr>>24)&0x7f,size=(hdr&0x00ffffff)>>>0;
+    pos+=4;if(size===0){lastBlock=true;break}
+    if(pos+size>audioData.length)break;
+    blocks.push({type,data:audioData.slice(pos,pos+size),size});
+    pos+=size;
+  }
+  const audioFrames=audioData.slice(pos);
+  const enc=new TextEncoder();
+
+  // Vorbis Comment
+  const vendor=enc.encode('reference libFLAC 1.3.2 20170101');
+  const comments=[];
+  if(tags.title)comments.push(enc.encode('TITLE='+tags.title));
+  if(tags.artist)comments.push(enc.encode('ARTIST='+tags.artist));
+  if(tags.album)comments.push(enc.encode('ALBUM='+tags.album));
+  if(tags.albumartist)comments.push(enc.encode('ALBUMARTIST='+tags.albumartist));
+  if(tags.genre)comments.push(enc.encode('GENRE='+tags.genre));
+  if(tags.year)comments.push(enc.encode('DATE='+tags.year));
+  if(tags.track)comments.push(enc.encode('TRACKNUMBER='+tags.track));
+  if(tags.disk)comments.push(enc.encode('DISCNUMBER='+tags.disk));
+  if(tags.composer)comments.push(enc.encode('COMPOSER='+tags.composer));
+  if(tags.publisher)comments.push(enc.encode('PUBLISHER='+tags.publisher));
+  if(tags.copyright)comments.push(enc.encode('COPYRIGHT='+tags.copyright));
+  if(tags.comment)comments.push(enc.encode('DESCRIPTION='+tags.comment));
+  if(comments.length===0)comments.push(new Uint8Array(0));
+
+  let vcs=4+vendor.length+4;
+  for(const c of comments)vcs+=4+c.length;
+  const vc=new Uint8Array(vcs);
+  let vp=0;
+  vc[vp++]=vendor.length&0xff;vc[vp++]=(vendor.length>>8)&0xff;vc[vp++]=(vendor.length>>16)&0xff;vc[vp++]=(vendor.length>>24)&0xff;
+  vc.set(vendor,vp);vp+=vendor.length;
+  vc[vp++]=comments.length&0xff;vc[vp++]=(comments.length>>8)&0xff;vc[vp++]=(comments.length>>16)&0xff;vc[vp++]=(comments.length>>24)&0xff;
+  for(const c of comments){vc[vp++]=c.length&0xff;vc[vp++]=(c.length>>8)&0xff;vc[vp++]=(c.length>>16)&0xff;vc[vp++]=(c.length>>24)&0xff;vc.set(c,vp);vp+=c.length;}
+
+  // Picture block
+  let pic=null;
+  if(tags.picture&&tags.picture.length>0){
+    let mime='image/jpeg';
+    if(tags.picture[0]===0x89&&tags.picture[1]===0x50)mime='image/png';
+    const mb=enc.encode(mime),db=enc.encode('Cover');
+    pic=new Uint8Array(4+4+mb.length+4+db.length+16+4+tags.picture.length);
+    let pp=0;
+    pic[pp++]=0;pic[pp++]=0;pic[pp++]=0;pic[pp++]=3;
+    pic[pp++]=(mb.length>>24)&0xff;pic[pp++]=(mb.length>>16)&0xff;pic[pp++]=(mb.length>>8)&0xff;pic[pp++]=mb.length&0xff;pic.set(mb,pp);pp+=mb.length;
+    pic[pp++]=(db.length>>24)&0xff;pic[pp++]=(db.length>>16)&0xff;pic[pp++]=(db.length>>8)&0xff;pic[pp++]=db.length&0xff;pic.set(db,pp);pp+=db.length;
+    pp+=16;
+    const il=tags.picture.length;
+    pic[pp++]=(il>>24)&0xff;pic[pp++]=(il>>16)&0xff;pic[pp++]=(il>>8)&0xff;pic[pp++]=il&0xff;pic.set(tags.picture,pp);
+  }
+
+  const nb=[];
+  for(const b of blocks){if(b.type===0)nb.push(b)}
+  nb.push({type:4,data:vc});
+  if(pic)nb.push({type:6,data:pic});
+  for(const b of blocks){if(b.type!==0&&b.type!==4&&b.type!==6&&b.type!==1)nb.push(b)}
+
+  const parts=[new Uint8Array([0x66,0x4c,0x61,0x43])];
+  for(let i=0;i<nb.length;i++){
+    const b=nb[i],isLast=i===nb.length-1;
+    const h=(((isLast?1:0)<<31)|(b.type<<24)|b.data.length)>>>0;
+    const hd=new Uint8Array(4);
+    hd[0]=(h>>24)&0xff;hd[1]=(h>>16)&0xff;hd[2]=(h>>8)&0xff;hd[3]=h&0xff;
+    parts.push(hd,b.data);
+  }
+  parts.push(audioFrames);
+  const tl=parts.reduce((s,p)=>s+p.length,0);
+  const out=new Uint8Array(tl);let o=0;
+  for(const p of parts){out.set(p,o);o+=p.length}
+  return out;
+}
+
+function writeMetadata(audioData, tags, format){
+  if(format==='mp3')return writeID3v2Tags(audioData,tags);
+  if(format==='flac')return writeFLACMeta(audioData,tags);
+  return audioData;
+}
+
+// ============================================================
+//  NCM Constants
+// ============================================================
+const NCM_MAGIC=[0x43,0x54,0x45,0x4e,0x46,0x44,0x41,0x4d];
+const AES_KEY_FOR_KEY_DATA=new Uint8Array([0x68,0x7a,0x48,0x52,0x41,0x6d,0x73,0x6f,0x35,0x6b,0x49,0x6e,0x62,0x61,0x78,0x57]);
+const AES_KEY_FOR_META=new Uint8Array([0x23,0x31,0x34,0x6c,0x6a,0x6b,0x5f,0x21,0x5c,0x5d,0x26,0x30,0x55,0x3c,0x27,0x28]);
+const META_PREFIX="163 key(Don't modify):";
+const KEY_DATA_PREFIX='neteasecloudmusic';
+const MIME_TYPES={mp3:'audio/mpeg',flac:'audio/flac',m4a:'audio/mp4',ogg:'audio/ogg',wav:'audio/wav',wma:'audio/x-ms-wma',ape:'audio/ape'};
+
+// ============================================================
+//  NCM RC4 Keybox
+// ============================================================
+function createKeyBox(keyData){
+  const box=new Uint8Array(256);for(let i=0;i<256;i++)box[i]=i;
+  let j=0;
+  for(let i=0;i<256;i++){j=(box[i]+j+keyData[i%keyData.length])&0xff;[box[i],box[j]]=[box[j],box[i]]}
+  const kb=new Uint8Array(256);
+  for(let i=0;i<256;i++){const idx=(i+1)&0xff,n=box[idx],m=box[(idx+n)&0xff];kb[i]=box[(n+m)&0xff]}
+  return kb;
+}
+
+function detectAudioFormat(buf){
+  if(buf[0]===0xff&&(buf[1]&0xe0)===0xe0)return'mp3';
+  if(buf[0]===0x66&&buf[1]===0x4c&&buf[2]===0x61&&buf[3]===0x43)return'flac';
+  if(buf[0]===0x4f&&buf[1]===0x67&&buf[2]===0x67&&buf[3]===0x53)return'ogg';
+  if(buf[0]===0x52&&buf[1]===0x49&&buf[2]===0x46&&buf[3]===0x46)return'wav';
+  return'mp3';
+}
+
+function parseFilename(fn){
+  let name=fn.replace(/\.(ncm|mp3|flac|m4a|ogg|wav|ape|wma)$/i,'');
+  for(const s of[' - ',' — ','-','—']){const i=name.indexOf(s);if(i>0&&i<name.length-s.length)return{artist:name.slice(0,i).trim(),title:name.slice(i+s.length).trim()}}
+  return{artist:'',title:name};
+}
+
+// ============================================================
+//  NCM Decryption
+// ============================================================
+function safeGetU32(view,offset){try{if(offset<0||offset+4>view.byteLength)return null;return view.getUint32(offset,true)}catch(e){return null}}
+
+async function decryptNCM(rawData,filename,callbacks={}){
+  const totalLen=rawData.byteLength;
+  const raw=new Uint8Array(rawData);
+  const view=new DataView(rawData);
+  let offset=0;
+  const log=(m)=>console.log('[NCM]',m);
+
+  if(totalLen<10)throw new Error('文件太小，不是有效的 NCM 文件');
+  for(let i=0;i<8;i++)if(raw[i]!==NCM_MAGIC[i])throw new Error('不是有效的 NCM 文件（魔数不匹配）');
+  offset=10;
+  callbacks.onProgress&&callbacks.onProgress(5);
+
+  // Get key
+  let keyLen=safeGetU32(view,offset);
+  if(keyLen===null)throw new Error(`无法读取密钥长度（位置 ${offset}，总长 ${totalLen}）`);
+  offset+=4;
+  if(keyLen<=0||keyLen>2048||offset+keyLen>totalLen)throw new Error(`密钥数据异常：长度=${keyLen}，位置=${offset}，总长=${totalLen}`);
+  const keyXor=raw.slice(offset,offset+keyLen);offset+=keyLen;
+  for(let i=0;i<keyXor.length;i++)keyXor[i]^=0x64;
+  const keyDecrypted=aesEcbDecrypt(keyXor,AES_KEY_FOR_KEY_DATA);
+  const keyData=keyDecrypted.slice(KEY_DATA_PREFIX.length);
+  if(keyData.length<8)throw new Error('密钥解密失败，文件可能已损坏');
+  callbacks.onProgress&&callbacks.onProgress(15);
+
+  const keyBox=createKeyBox(keyData);
+  callbacks.onProgress&&callbacks.onProgress(20);
+
+  // Get metadata JSON from NCM
+  let metaLen=safeGetU32(view,offset);
+  if(metaLen===null)throw new Error(`无法读取元数据长度（位置 ${offset}）`);
+  offset+=4;
+  let oriMeta={};
+  if(metaLen>0&&offset+metaLen<=totalLen){
+    const metaXor=new Uint8Array(raw.slice(offset,offset+metaLen));offset+=metaLen;
+    for(let i=0;i<metaXor.length;i++)metaXor[i]^=0x63;
+    const metaBody=metaXor.slice(META_PREFIX.length);
+    let metaDecrypted=null;
+    try{const b64=new TextDecoder().decode(metaBody);const ct=base64ToBytes(b64);if(ct.length>=16&&ct.length%16===0)metaDecrypted=aesEcbDecrypt(ct,AES_KEY_FOR_META)}catch(e){}
+    if(!metaDecrypted){
+      try{const hex=new TextDecoder().decode(metaBody).replace(/[^0-9a-fA-F]/g,'');if(hex.length>=32&&hex.length%32===0)metaDecrypted=aesEcbDecrypt(new Uint8Array(hex.match(/.{2}/g).map(b=>parseInt(b,16))),AES_KEY_FOR_META)}catch(e){}
+    }
+    if(metaDecrypted){
+      try{
+        const jsonStr=new TextDecoder().decode(metaDecrypted);
+        const ci=jsonStr.indexOf(':');
+        if(ci>0){
+          const obj=JSON.parse(jsonStr.slice(ci+1));
+          oriMeta=jsonStr.slice(0,ci)==='dj'?(obj.mainMusic||{}):obj;
+        }
+      }catch(e){log('元数据JSON解析失败: '+e.message)}
+    }
+    if(oriMeta.albumPic)oriMeta.albumPic=oriMeta.albumPic.replace(/^http:\/\//,'https://')+'?param=500y500';
+  }
+  callbacks.onProgress&&callbacks.onProgress(30);
+  callbacks.onMeta&&callbacks.onMeta(oriMeta,{offset,total:totalLen});
+
+  // Get audio
+  if(offset>=totalLen)throw new Error(`元数据后无剩余数据（位置 ${offset}，总长 ${totalLen}）`);
+  let audioStart=offset;
+  const imgLen=safeGetU32(view,offset+5);
+  if(imgLen!==null&&imgLen>=0&&imgLen<=20*1024*1024){
+    const candidate=offset+imgLen+13;
+    if(candidate>offset&&candidate<totalLen)audioStart=candidate;
+  }
+  if(audioStart>=totalLen-4)audioStart=offset;
+
+  const encryptedAudio=raw.slice(audioStart);
+  const audio=new Uint8Array(encryptedAudio.length);
+  const total=encryptedAudio.length;
+  let lastPct=30;
+  for(let i=0;i<total;i++){
+    audio[i]=encryptedAudio[i]^keyBox[i&0xff];
+    if(i%50000===0||i===total-1){
+      const pct=30+Math.floor(i/total*65);
+      if(pct>lastPct){lastPct=pct;callbacks.onProgress&&callbacks.onProgress(pct)}
+    }
+  }
+  callbacks.onProgress&&callbacks.onProgress(95);
+
+  // ---- Fetch online metadata from NetEase (if server proxy available) ----
+  const musicId = oriMeta.musicId || '';
+  let onlineMeta = null;
+  if (musicId && musicId !== 0 && musicId !== '0') {
+    try {
+      // Try local proxy first (when served via server.js)
+      const apiUrl = `${location.protocol}//${location.host}/api/metadata?musicId=${musicId}`;
+      const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
+      if (resp.ok) {
+        onlineMeta = await resp.json();
+        log('在线获取元数据成功: ' + (onlineMeta.year || '?') + ' ' + (onlineMeta.genre || ''));
+      }
+    } catch (e) {
+      log('在线获取元数据失败: ' + e.message);
+    }
+  }
+
+  // ---- Extract all metadata from NCM JSON + decrypted audio ID3 tags ----
+  const id3Tags=parseID3v2(audio); // Parse ID3v2 tags from decrypted audio
+  const fallback=parseFilename(filename);
+
+  // Merge: onlineMeta > ID3 tags > NCM JSON > filename fallback
+  const title = onlineMeta?.title || id3Tags?.title || oriMeta.musicName || fallback.title;
+
+  // Artist — use online meta first if available
+  let artists=[];
+  if(onlineMeta?.artists?.length>0){
+    for(const name of onlineMeta.artists) artists.push([name]);
+  }else if(typeof oriMeta.artist==='string')artists=[[oriMeta.artist]];
+  else if(Array.isArray(oriMeta.artist)){
+    for(const item of oriMeta.artist){
+      if(typeof item==='string')artists.push([item]);
+      else if(Array.isArray(item)&&item.length>0)artists.push([item[0]]);
+    }
+  }
+  if(artists.length===0&&id3Tags?.artist)artists=id3Tags.artist.split(';').map(s=>[s.trim()]).filter(s=>s[0]);
+  if(artists.length===0&&fallback.artist)artists=fallback.artist.split(',').map(s=>[s.trim()]).filter(s=>s[0]);
+  const artistStr=artists.map(a=>Array.isArray(a)?a[0]:a).filter(Boolean).join('; ');
+
+  const album = onlineMeta?.album || oriMeta.album || id3Tags?.album || '';
+  const albumartist = id3Tags?.albumartist || artistStr;
+  const year = onlineMeta?.year || id3Tags?.year || '';
+  const genre = onlineMeta?.genre || id3Tags?.genre || '';
+  const track = onlineMeta?.track || id3Tags?.track || '';
+  const disk = onlineMeta?.disc || id3Tags?.disk || '';
+  const composer = onlineMeta?.originSong?.artists?.join(', ') || id3Tags?.composer || '';
+  const publisher = onlineMeta?.publisher || id3Tags?.publisher || '';
+  const copyright = id3Tags?.copyright || '';
+  const comment = onlineMeta?.description || id3Tags?.comment || '';
+  const isrc = id3Tags?.isrc || '';
+  const bpm = id3Tags?.bpm || '';
+  const subType = onlineMeta?.subType || '';
+
+  const format=oriMeta.format||detectAudioFormat(audio);
+
+  // Download cover from URL
+  let imageData=null;
+  if(oriMeta.albumPic){
+    try{const resp=await fetch(oriMeta.albumPic);if(resp.ok)imageData=new Uint8Array(await resp.arrayBuffer())}catch(e){}
+  }
+  callbacks.onProgress&&callbacks.onProgress(100);
+
+  return{
+    title,artist:artistStr,artists,album,albumartist,
+    year,genre,track,disk,composer,publisher,copyright,
+    comment,isrc,bpm,subType,
+    format,mime:MIME_TYPES[format]||'audio/mpeg',
+    audio,image:imageData,imageUrl:oriMeta.albumPic||null,
+    rawMeta:oriMeta,id3Tags:id3Tags,onlineMeta
+  };
+}
+
+// ============================================================
+//  UI
+// ============================================================
+const results=[];
+let jooxUUID=localStorage.getItem('um_joox_uuid')||'';
+
+function toast(msg,type){const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.getElementById('toastWrap').appendChild(el);setTimeout(function(){el.remove()},3000)}
+
+function updateStatus(){
+  const bar=document.getElementById('statusBar'),tb=document.getElementById('toolbar');
+  if(results.length===0){bar.style.display='none';tb.style.display='none'}else{
+    bar.style.display='flex';tb.style.display='flex';
+    const done=results.filter(r=>r.status!=='working').length;
+    document.getElementById('statusCount').textContent=`${done} / ${results.length}`;
+    document.getElementById('progressBar').style.width=`${results.length?done/results.length*100:0}%`;
+  }
+}
+
+function formatSize(bytes){
+  if(bytes<1024)return bytes+' B';if(bytes<1048576)return(bytes/1024).toFixed(1)+' KB';
+  return(bytes/1048576).toFixed(1)+' MB';
+}
+
+let expandedCards={};
+
+function toggleDetail(idx){
+  expandedCards[idx]=!expandedCards[idx];
+  renderResults();
+}
+
+function renderResults(){
+  const container=document.getElementById('results');
+  container.innerHTML=results.map((r,i)=>{
+    const coverHTML=r.imageUrl?'<img src="'+r.imageUrl+'" alt="封面" onerror="this.parentElement.innerHTML=\'<span class=no-cover>🎵</span>\'">':'<span class=no-cover>🎵</span>';
+    let badgeHTML='';
+    if(r.status==='working')badgeHTML='<span class="badge badge-working">解密中</span>';
+    else if(r.status==='error')badgeHTML='<span class="badge badge-error">失败</span>';
+    else badgeHTML='<span class="badge badge-success">'+r.format.toUpperCase()+'</span>';
+    const sizeStr=r.status==='done'?formatSize(r.audio.length):'';
+    const actionsHTML=r.status==='done'
+      ?'<button class="btn-dl" onclick="downloadResult('+i+')">⬇ 下载</button><button onclick="toggleDetail('+i+')">详情</button>'
+      :r.status==='error'
+        ?'<button onclick="removeResult('+i+')">✕ 移除</button>'
+        :'';
+
+    const metaTags=[];
+    if(r.artist)metaTags.push('<span class="tag"><span class="tag-icon">🎤</span>'+r.artist+'</span>');
+    if(r.album)metaTags.push('<span class="tag"><span class="tag-icon">💿</span>'+r.album+'</span>');
+    if(r.year)metaTags.push('<span class="tag"><span class="tag-icon">📅</span>'+r.year+'</span>');
+    if(r.genre)metaTags.push('<span class="tag"><span class="tag-icon">🎶</span>'+r.genre+'</span>');
+    if(r.track)metaTags.push('<span class="tag"><span class="tag-icon">🎵</span>#'+r.track+'</span>');
+
+    const expanded=expandedCards[i];
+    const detailFields=[];
+    if(r.albumartist&&r.albumartist!==r.artist)detailFields.push(['专辑艺术家',r.albumartist]);
+    if(r.composer)detailFields.push(['作曲',r.composer]);
+    if(r.publisher)detailFields.push(['发行方',r.publisher]);
+    if(r.subType)detailFields.push(['类型',r.subType]);
+    if(r.disk)detailFields.push(['碟/轨',r.track?r.disk+'/'+r.track:r.disk]);
+    if(r.isrc)detailFields.push(['ISRC',r.isrc]);
+    if(r.bpm)detailFields.push(['BPM',r.bpm]);
+    if(r.copyright)detailFields.push(['版权',r.copyright]);
+    if(r.comment)detailFields.push(['备注',r.comment]);
+    var detailHTML='';
+    if(expanded&&detailFields.length>0){
+      detailHTML='<div class="meta-detail show">'+detailFields.map(function(f){return '<div class="meta-row"><span class="meta-k">'+f[0]+'</span><span class="meta-v">'+f[1]+'</span></div>'}).join('')+'</div>';
+    }else if(expanded&&detailFields.length===0){
+      detailHTML='<div class="meta-detail show"><div class="meta-row"><span class="meta-v" style="color:var(--text2)">没有更多信息</span></div></div>';
+    }
+
+    return '<div class="result-card"><div class="cover">'+coverHTML+'</div><div class="info"><div class="song-title">'+(r.status==='working'?'正在解密...':(r.title||r.filename))+'</div><div class="song-meta">'+(metaTags.join('')||'<span style="color:var(--text2)">等待中...</span>')+'</div>'+detailHTML+'</div><div class="right-info">'+badgeHTML+'<span class="size">'+sizeStr+'</span><div class="actions">'+actionsHTML+'</div></div></div>';
+  }).join('');
+  updateStatus();
+}
+
+async function processFile(file){
+  const idx=results.length;
+  const entry={filename:file.name,title:file.name.replace(/\.ncm$/i,''),artist:'',album:'',albumartist:'',year:'',genre:'',track:'',disk:'',composer:'',publisher:'',copyright:'',comment:'',isrc:'',bpm:'',subType:'',format:'mp3',imageUrl:null,audio:null,image:null,status:'working'};
+  results.push(entry);renderResults();updateStatus();
+  try{
+    const rawData=await file.arrayBuffer();
+    const result=await decryptNCM(rawData,file.name,{
+      onProgress(pct){},
+      onMeta(meta){
+        if(meta.albumPic)entry.imageUrl=meta.albumPic;
+        if(meta.musicName)entry.title=meta.musicName;
+        entry.album=meta.album||entry.album;
+        renderResults();
+      }
+    });
+
+    const tags={
+      title:result.title,artist:result.artist,album:result.album,
+      albumartist:result.albumartist,year:result.year,genre:result.genre,
+      track:result.track,disk:result.disk,composer:result.composer,
+      publisher:result.publisher,copyright:result.copyright,comment:result.comment,
+      isrc:result.isrc,bpm:result.bpm,
+      picture:result.image
+    };
+    const audioWithMeta=writeMetadata(result.audio,tags,result.format);
+
+    Object.assign(entry,{
+      title:result.title,artist:result.artist,album:result.album,
+      albumartist:result.albumartist,year:result.year,genre:result.genre,
+      track:result.track,disk:result.disk,composer:result.composer,
+      publisher:result.publisher,copyright:result.copyright,
+      comment:result.comment,isrc:result.isrc,bpm:result.bpm,
+      subType:result.subType,
+      format:result.format,audio:audioWithMeta,image:result.image,
+      imageUrl:result.imageUrl||entry.imageUrl,mime:result.mime,status:'done'
+    });
+  }catch(err){
+    console.error(err);
+    entry.status='error';entry.error=err.message;
+    toast(file.name + ' - ' + err.message, 'error');
+  }
+  renderResults();updateStatus();
+  if(entry.status==='done')toast('解锁成功: ' + entry.title, 'success');
+}
+
+function downloadResult(idx){
+  var r=results[idx];if(!r||r.status!=='done'||!r.audio)return;
+  var ar=(r.artist||'').replace(/[\\/:*?"<>|]/g,'_');
+  var ti=(r.title||r.filename).replace(/[\\/:*?"<>|]/g,'_');
+  var fn=ar?ar+' - '+ti+'.'+r.format:ti+'.'+r.format;
+  var blob=new Blob([r.audio],{type:r.mime||'audio/mpeg'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=fn;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+function removeResult(idx){results.splice(idx,1);renderResults();updateStatus()}
+function downloadAll(){var done=results.filter(function(r){return r.status==='done'});if(done.length===0){toast('没有可下载的文件','error');return}done.forEach(function(_,i){setTimeout(function(){var idx=results.indexOf(done[i]);if(idx>=0)downloadResult(idx)},i*300)});toast('开始下载 ' + done.length + ' 个文件','success')}
+function clearAll(){results.length=0;renderResults();updateStatus()}
+
+function openSettings(){
+  var overlay=document.createElement('div');overlay.className='modal-overlay';
+  overlay.innerHTML='<div class="modal"><h3>⚙ 解密设定</h3><label>JOOX UUID <small style="color:var(--text2)">（仅 JOOX 文件需要）</small></label><input type="text" id="jooxUUIDInput" value="'+jooxUUID+'" maxlength="32" placeholder="32位十六进制 UUID"><div class="tip">获取方式见 <a href="https://git.unlock-music.dev/um/joox-crypto/wiki/%E8%8E%B7%E5%8F%96%E8%AE%BE%E5%A4%87-UUID" target="_blank">Wiki</a></div><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">取消</button><button class="btn-ok" id="saveSettings">确定</button></div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('saveSettings').onclick=function(){jooxUUID=document.getElementById('jooxUUIDInput').value.trim();localStorage.setItem('um_joox_uuid',jooxUUID);overlay.remove();toast('设定已保存','success')};
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove()});
+}
+
+// ============================================================
+//  Events
+// ============================================================
+const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput');
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('dragover',(e)=>{e.preventDefault();dropZone.classList.add('dragover')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop',(e)=>{e.preventDefault();dropZone.classList.remove('dragover');handleFiles(e.dataTransfer.files)});
+fileInput.addEventListener('change',()=>{handleFiles(fileInput.files);fileInput.value=''});
+
+function handleFiles(files){
+  const ncmFiles=[];for(const f of files){if(f.name.toLowerCase().endsWith('.ncm'))ncmFiles.push(f)}
+  if(ncmFiles.length===0){toast('请选择 .ncm 文件','error');return}
+  toast('已添加 ' + ncmFiles.length + ' 个文件', 'success');
+  for(var i=0;i<ncmFiles.length;i++)processFile(ncmFiles[i]);
+}
+
+// ---- Detect if served from localhost or opened via file:// ----
+(function(){
+  const isLocalhost = location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  const isFile = location.protocol==='file:';
+  if(!isLocalhost&&isFile){
+    document.getElementById('hostNotice').style.display='flex';
+  }
+})();
+
+function showServerHint(){
+  var o=document.createElement('div');o.className='modal-overlay';
+  o.innerHTML='<div class="modal"><h3>⚙ 在线元数据</h3><p style="line-height:1.8;font-size:.88rem">直接双击打开的HTML文件由于浏览器安全限制（CORS），无法调用网易云API获取在线元数据。</p><p style="line-height:1.8;font-size:.88rem;margin-top:.6rem">请运行以下命令启动本地服务器：</p><pre style="background:var(--bg);padding:.8rem;border-radius:6px;margin-top:.6rem;font-size:.85rem">node server.js</pre><p style="line-height:1.8;font-size:.85rem;margin-top:.6rem;color:var(--text2)">然后打开 <strong style="color:var(--accent2)">http://localhost:3456</strong> 即可自动获取流派、年份、发行方等完整信息。</p><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div></div>';
+  document.body.appendChild(o);
+  o.addEventListener('click',function(e){if(e.target===o)o.remove()});
+}
+</script>
+</body>
+</html>
