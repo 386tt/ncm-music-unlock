@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test.js)",
+      "Bash(node cli.js --help)",
+      "Bash(node test-aes-purejs.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --check _test_script.js)",
+      "Bash(rm -f _test_script.js)"
+    ]
+  }
+}
