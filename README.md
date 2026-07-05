@@ -1,6 +1,7 @@
 # **.ncm文件转换器**
 
 由DeepSeek V4pro+Claude+我共同完成
+基于**MengYX的音乐解锁**
 
 #### **基础版**使用教程:
 
