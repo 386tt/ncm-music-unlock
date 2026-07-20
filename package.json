@@ -1,6 +1,6 @@
 {
   "name": "ncm-unlock",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "description": "解锁网易云音乐 .ncm 文件，保留所有元信息（标题、歌手、专辑、封面图等）",
   "main": "index.js",
   "bin": {

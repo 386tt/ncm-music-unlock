@@ -66,3 +66,33 @@ node server.js
 ## License
 
 MIT
+
+---
+
+## 更新日志
+
+### v2.2 (2026-07-20)
+
+- 🎨 **Apple 风格 UI 全面美化** — unlock.html 采用毛玻璃效果、SF 字体、胶囊按钮、iOS Sheet 风格 Modal、层叠阴影
+- 🌗 **浅色/暗色双模式** — 支持系统自动切换 + 手动切换，右上角一键切换主题
+- ✨ **全新交互动画** — 卡片交错入场、拖拽呼吸光效、按钮弹性反馈、进度条光泽扫描
+- 🎨 **Vue 版本同步美化** — Element UI 色系整体替换为 Apple Design 配色，毛玻璃上传区
+- 🔧 **CSS 变量体系重构** — 统一设计 Token，浅色/暗色一键切换
+
+### v2.1 (2026-07)
+
+- 🎉 初始发布
+- NCM 解密核心 (AES-128-ECB + RC4 KeyBox)
+- MP3 ID3v2.4 / FLAC Vorbis Comment 元信息写入
+- 浏览器拖拽解锁 + 命令行批量处理
+- 在线元数据代理服务器
+
+---
+
+## 贡献者
+
+| 姓名 | GitHub | 角色 |
+|------|--------|------|
+| **386tt** | [@386tt](https://github.com/386tt) | 作者 & 维护者 |
+
+> 本项目参考了 [unlock-music](https://git.unlock-music.dev/um/web) 项目的 NCM 解密方案。

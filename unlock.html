@@ -6,83 +6,407 @@
 <title>NCM 音乐解锁</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root { --bg: #0f0f1a; --card: #1a1a2e; --card2: #22223a; --border: #2a2a45; --text: #e0e0e0; --text2: #999; --accent: #6c5ce7; --accent2: #a29bfe; --green: #00cec9; --red: #e74c3c; --yellow: #fdcb6e; --orange: #e17055; --radius: 12px; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; background-image: radial-gradient(ellipse at 20% 20%, rgba(108,92,231,.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(0,206,201,.06) 0%, transparent 60%); }
-.header { text-align: center; padding: 2rem 1rem .5rem; }
-.header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -.5px; background: linear-gradient(135deg, var(--accent2), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.header p { color: var(--text2); margin-top: .4rem; font-size: .9rem; }
-.container { max-width: 900px; margin: 0 auto; padding: 0 1.5rem 3rem; }
-.drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 3rem 2rem; text-align: center; transition: all .3s; background: var(--card); cursor: pointer; }
-.drop-zone.dragover { border-color: var(--accent); background: rgba(108,92,231,.08); }
-.drop-zone .icon { font-size: 3rem; margin-bottom: .8rem; opacity: .6; }
-.drop-zone .title { font-size: 1.1rem; font-weight: 600; margin-bottom: .3rem; }
-.drop-zone .hint { font-size: .85rem; color: var(--text2); }
+
+/* =========================================
+   Apple Design System — CSS Variables
+   ========================================= */
+:root {
+  --bg-base: #f5f5f7;
+  --bg-elevated: rgba(255,255,255,0.72);
+  --bg-sunken: rgba(0,0,0,0.04);
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary: #aeaeb2;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --accent-press: #0060c7;
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --error: #ff3b30;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.08), 0 8px 20px rgba(0,0,0,0.04);
+  --ease-spring: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Auto dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base: #000000;
+    --bg-elevated: rgba(255,255,255,0.08);
+    --bg-sunken: rgba(255,255,255,0.04);
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #6e6e73;
+    --accent: #2997ff;
+    --accent-hover: #40a9ff;
+    --accent-press: #0077ed;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,0.6);
+  }
+}
+
+/* Manual dark mode override */
+:root[data-theme="dark"] {
+  --bg-base: #000000;
+  --bg-elevated: rgba(255,255,255,0.08);
+  --bg-sunken: rgba(255,255,255,0.04);
+  --text-primary: #f5f5f7;
+  --text-secondary: #98989d;
+  --text-tertiary: #6e6e73;
+  --accent: #2997ff;
+  --accent-hover: #40a9ff;
+  --accent-press: #0077ed;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+/* Manual light mode override */
+:root[data-theme="light"] {
+  --bg-base: #f5f5f7;
+  --bg-elevated: rgba(255,255,255,0.72);
+  --bg-sunken: rgba(0,0,0,0.04);
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary: #aeaeb2;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --accent-press: #0060c7;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.08), 0 8px 20px rgba(0,0,0,0.04);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+  line-height: 1.47059;
+  background-image:
+    radial-gradient(ellipse at 20% 20%, rgba(0,113,227,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(52,199,89,0.04) 0%, transparent 55%);
+}
+/* =========================================
+   Header
+   ========================================= */
+.header { text-align: center; padding: 3.5rem 1rem 1.5rem; }
+.header h1 {
+  font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--text-primary); line-height: 1.1;
+}
+.header p { color: var(--text-secondary); margin-top: 0.5rem; font-size: 1.0625rem; font-weight: 400; letter-spacing: -0.01em; }
+
+.container { max-width: 780px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+
+/* Theme Toggle */
+.theme-toggle {
+  position: fixed; top: 1.25rem; right: 1.25rem;
+  width: 42px; height: 42px; border-radius: 50%; border: none;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer; font-size: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; transition: all 0.3s var(--ease-spring);
+  color: var(--text-primary);
+}
+.theme-toggle:hover { transform: scale(1.08); box-shadow: var(--shadow-md); }
+.theme-toggle:active { transform: scale(0.9); }
+
+/* =========================================
+   Drop Zone — Frosted Glass + Dashed Ring
+   ========================================= */
+.drop-zone {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 3.5rem 2rem; text-align: center;
+  transition: all 0.4s var(--ease-spring);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  border: 2px dashed rgba(0,0,0,0.12);
+  overflow: hidden;
+}
+@media (prefers-color-scheme: dark) { .drop-zone { border-color: rgba(255,255,255,0.15); } }
+
+.drop-zone::before {
+  content: ''; position: absolute; inset: -1px; z-index: -1;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--accent), #5ac8fa, var(--accent));
+  opacity: 0; transition: opacity 0.4s var(--ease-spring);
+  filter: blur(20px);
+}
+.drop-zone.dragover::before { opacity: 0.3; animation: breathe 2s var(--ease-spring) infinite; }
+.drop-zone.dragover {
+  border-color: var(--accent);
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(0,113,227,0.15);
+}
+.drop-zone .icon {
+  font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.8;
+  transition: transform 0.3s var(--ease-bounce);
+}
+.drop-zone.dragover .icon { transform: scale(1.15); }
+.drop-zone .title { font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.4rem; letter-spacing: -0.01em; }
+.drop-zone .hint { font-size: 0.875rem; color: var(--text-tertiary); line-height: 1.5; }
 .drop-zone input[type=file] { display: none; }
-.status-bar { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; padding: .8rem 1rem; background: var(--card); border-radius: var(--radius); font-size: .85rem; }
-.status-bar .count { font-weight: 600; color: var(--accent2); }
-.progress-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); border-radius: 3px; transition: width .3s; }
-.toolbar { display: flex; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
-.toolbar button { padding: .6rem 1.2rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; font-size: .85rem; transition: all .2s; }
-.toolbar button:hover { border-color: var(--accent); color: var(--accent2); }
-.toolbar button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.toolbar button.primary:hover { background: #5b4cdb; }
-.toolbar button:disabled { opacity: .4; cursor: not-allowed; }
-.results { margin-top: 1rem; }
-.result-card { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem; background: var(--card); border-radius: var(--radius); margin-bottom: .6rem; border: 1px solid transparent; transition: all .2s; }
-.result-card:hover { border-color: var(--border); }
-.result-card .cover { width: 64px; height: 64px; border-radius: 8px; background: var(--card2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+/* =========================================
+   Status Bar & Progress
+   ========================================= */
+.status-bar {
+  display: flex; align-items: center; gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.875rem;
+}
+.status-bar .count { font-weight: 600; color: var(--accent); min-width: 4rem; }
+.progress-bar-wrap { flex: 1; height: 4px; background: var(--bg-sunken); border-radius: 2px; overflow: hidden; }
+.progress-bar-fill {
+  height: 100%; background: var(--accent); border-radius: 2px;
+  transition: width 0.5s var(--ease-spring);
+  position: relative;
+}
+.progress-bar-fill::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  animation: shimmer 2.5s infinite;
+}
+
+/* =========================================
+   Toolbar
+   ========================================= */
+.toolbar { display: flex; gap: 0.5rem; margin-top: 1.25rem; flex-wrap: wrap; }
+.toolbar button {
+  padding: 0.6rem 1.5rem; border: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.875rem; font-weight: 500;
+  font-family: inherit; letter-spacing: -0.01em;
+  transition: all 0.25s var(--ease-spring);
+  box-shadow: var(--shadow-sm);
+}
+.toolbar button:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.toolbar button:active { transform: translateY(0) scale(0.97); }
+.toolbar button.primary {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 2px 8px rgba(0,113,227,0.3);
+}
+.toolbar button.primary:hover { background: var(--accent-hover); box-shadow: 0 4px 16px rgba(0,113,227,0.4); }
+.toolbar button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+/* =========================================
+   Result Cards
+   ========================================= */
+.results { margin-top: 1.25rem; }
+.result-card {
+  display: flex; align-items: flex-start; gap: 1rem;
+  padding: 1rem;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s var(--ease-spring);
+  animation: cardIn 0.45s var(--ease-spring) both;
+}
+.result-card:nth-child(1) { animation-delay: 0s; }
+.result-card:nth-child(2) { animation-delay: 0.06s; }
+.result-card:nth-child(3) { animation-delay: 0.12s; }
+.result-card:nth-child(4) { animation-delay: 0.18s; }
+.result-card:nth-child(5) { animation-delay: 0.24s; }
+.result-card:nth-child(n+6) { animation-delay: 0.28s; }
+.result-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.result-card .cover {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
 .result-card .cover img { width: 100%; height: 100%; object-fit: cover; }
-.result-card .cover .no-cover { font-size: 1.8rem; opacity: .3; }
+.result-card .cover .no-cover { font-size: 1.5rem; opacity: 0.4; }
+
 .result-card .info { flex: 1; min-width: 0; }
-.result-card .info .song-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1rem; }
-.result-card .info .song-meta { font-size: .78rem; color: var(--text2); margin-top: .3rem; display: flex; flex-wrap: wrap; gap: .15rem .8rem; }
-.result-card .info .song-meta .tag { display: inline-flex; align-items: center; gap: .15rem; }
-.result-card .info .song-meta .tag .tag-icon { opacity: .6; font-size: .7rem; }
-.result-card .right-info { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; flex-shrink: 0; }
-.result-card .badge { font-size: .7rem; padding: .2rem .6rem; border-radius: 4px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
-.badge-success { background: rgba(0,206,201,.15); color: var(--green); }
-.badge-error { background: rgba(231,76,60,.15); color: var(--red); }
-.badge-working { background: rgba(253,203,110,.15); color: var(--yellow); }
-.result-card .size { font-size: .75rem; color: var(--text2); white-space: nowrap; }
-.result-card .actions { display: flex; gap: .4rem; }
-.result-card .actions button { padding: .45rem .8rem; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font-size: .78rem; transition: all .2s; white-space: nowrap; }
-.result-card .actions button:hover { border-color: var(--accent); color: var(--accent2); }
-.result-card .actions .btn-dl { background: var(--accent); border-color: var(--accent); color: #fff; }
-.result-card .actions .btn-dl:hover { background: #5b4cdb; }
-.footer { text-align: center; padding: 1rem; color: var(--text2); font-size: .75rem; }
-.footer a { color: var(--accent2); text-decoration: none; }
-.toast-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 9999; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
-.toast { padding: .8rem 1.2rem; border-radius: 8px; font-size: .85rem; animation: slideIn .3s ease; max-width: 400px; pointer-events: auto; }
-.toast.success { background: #00b894; color: #fff; }
-.toast.error { background: #e74c3c; color: #fff; }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.result-card .info .song-title {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.9375rem; letter-spacing: -0.01em;
+}
+.result-card .info .song-meta {
+  font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.35rem;
+  display: flex; flex-wrap: wrap; gap: 0.15rem 1rem;
+}
+.result-card .info .song-meta .tag { display: inline-flex; align-items: center; gap: 0.25rem; }
+.result-card .info .song-meta .tag .tag-icon { opacity: 0.5; font-size: 0.7rem; }
+
+.result-card .right-info { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0; }
+.result-card .badge {
+  font-size: 0.6875rem; padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap;
+}
+.badge-success { background: rgba(52,199,89,0.12); color: var(--success); }
+.badge-error { background: rgba(255,59,48,0.12); color: var(--error); }
+.badge-working { background: rgba(255,159,10,0.12); color: var(--warning); }
+
+.result-card .size { font-size: 0.75rem; color: var(--text-tertiary); white-space: nowrap; }
+.result-card .actions { display: flex; gap: 0.4rem; }
+.result-card .actions button {
+  padding: 0.4rem 0.9rem; border: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-sunken);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.75rem; font-weight: 500; font-family: inherit;
+  transition: all 0.25s var(--ease-spring);
+  white-space: nowrap;
+}
+.result-card .actions button:hover { background: var(--bg-elevated); box-shadow: var(--shadow-sm); }
+.result-card .actions button:active { transform: scale(0.93); }
+.result-card .actions .btn-dl {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 2px 6px rgba(0,113,227,0.25);
+}
+.result-card .actions .btn-dl:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(0,113,227,0.35); }
+
+/* =========================================
+   Footer
+   ========================================= */
+.footer { text-align: center; padding: 2rem 1rem; color: var(--text-tertiary); font-size: 0.75rem; line-height: 1.6; }
+.footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.footer a:hover { text-decoration: underline; }
+.toast-wrap {
+  position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%);
+  z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;
+}
+.toast {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.875rem; font-weight: 500;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  animation: toastIn 0.45s var(--ease-bounce);
+  max-width: 440px; pointer-events: auto;
+  box-shadow: var(--shadow-lg);
+  letter-spacing: -0.01em;
+}
+.toast.success { background: rgba(52,199,89,0.92); color: #fff; }
+.toast.error { background: rgba(255,59,48,0.92); color: #fff; }
 
 /* Metadata Detail */
-.meta-detail { background: var(--card2); border-radius: 8px; padding: .6rem 1rem; margin-top: .5rem; font-size: .75rem; display: none; }
+.meta-detail { background: var(--bg-sunken); border-radius: var(--radius-sm); padding: 0.6rem 1rem; margin-top: 0.6rem; font-size: 0.75rem; display: none; }
 .meta-detail.show { display: block; }
-.meta-detail .meta-row { display: flex; padding: .15rem 0; }
-.meta-detail .meta-row .meta-k { color: var(--accent2); width: 70px; flex-shrink: 0; }
-.meta-detail .meta-row .meta-v { color: var(--text); word-break: break-all; }
+.meta-detail .meta-row { display: flex; padding: 0.18rem 0; }
+.meta-detail .meta-row .meta-k { color: var(--accent); width: 80px; flex-shrink: 0; font-weight: 500; }
+.meta-detail .meta-row .meta-v { color: var(--text-primary); word-break: break-all; }
 
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9998; display: flex; align-items: center; justify-content: center; }
-.modal { background: var(--card); border-radius: var(--radius); padding: 2rem; max-width: 500px; width: 90%; border: 1px solid var(--border); }
-.modal h3 { margin-bottom: 1rem; }
-.modal label { display: block; font-size: .85rem; color: var(--text2); margin-bottom: .3rem; }
-.modal input[type=text] { width: 100%; padding: .6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: .9rem; }
-.modal .tip { font-size: .75rem; color: var(--text2); margin-top: .3rem; }
-.modal .tip a { color: var(--accent2); }
-.modal .btns { display: flex; gap: .6rem; margin-top: 1.2rem; justify-content: flex-end; }
-.modal .btns button { padding: .6rem 1.2rem; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-size: .85rem; background: transparent; color: var(--text); }
-.modal .btns .btn-ok { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Modal — iOS Sheet Style */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 9998;
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn 0.3s var(--ease-spring);
+}
+.modal {
+  background: var(--bg-elevated);
+  backdrop-filter: blur(50px) saturate(200%);
+  -webkit-backdrop-filter: blur(50px) saturate(200%);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.75rem 1.5rem 2rem;
+  max-width: 520px; width: 100%;
+  box-shadow: var(--shadow-lg);
+  animation: sheetUp 0.4s var(--ease-bounce);
+}
+.modal h3 { margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; }
+.modal label { display: block; font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.4rem; font-weight: 500; }
+.modal input[type=text] {
+  width: 100%; padding: 0.7rem;
+  border-radius: var(--radius-sm); border: none;
+  background: var(--bg-sunken); color: var(--text-primary);
+  font-size: 0.9375rem; font-family: inherit;
+  outline: none; transition: box-shadow 0.2s;
+}
+.modal input[type=text]:focus { box-shadow: 0 0 0 3px rgba(0,113,227,0.25); }
+.modal .tip { font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.4rem; }
+.modal .tip a { color: var(--accent); }
+.modal .btns { display: flex; gap: 0.75rem; margin-top: 1.5rem; justify-content: flex-end; }
+.modal .btns button {
+  padding: 0.65rem 1.5rem; border-radius: var(--radius-full); border: none;
+  cursor: pointer; font-size: 0.875rem; font-weight: 500; font-family: inherit;
+  background: var(--bg-sunken); color: var(--text-primary);
+  transition: all 0.25s var(--ease-spring);
+}
+.modal .btns button:hover { background: var(--bg-elevated); }
+.modal .btns button:active { transform: scale(0.96); }
+.modal .btns .btn-ok {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 2px 6px rgba(0,113,227,0.25);
+}
+.modal .btns .btn-ok:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(0,113,227,0.35); }
+
+.modal pre {
+  background: var(--bg-sunken); padding: 0.8rem;
+  border-radius: var(--radius-sm); margin-top: 0.6rem;
+  font-size: 0.85rem; font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  overflow-x: auto;
+}
 
 /* Settings notice */
-.settings-notice { display: flex; align-items: center; gap: .4rem; padding: .5rem .8rem; background: var(--card); border-radius: 8px; margin-top: 1rem; font-size: .82rem; }
-.settings-notice .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.settings-notice {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  background: rgba(255,159,10,0.06);
+  border-radius: var(--radius-md);
+  margin-top: 1.25rem;
+  font-size: 0.8125rem; color: var(--text-secondary);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.settings-notice .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--warning); flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(255,159,10,0.4);
+}
+
+/* =========================================
+   Animations
+   ========================================= */
+@keyframes toastIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+@keyframes breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.5; } }
 </style>
 </head>
 <body>
+
+<button class="theme-toggle" id="themeToggle" title="切换浅色/暗色模式" aria-label="切换浅色/暗色模式">☀️</button>
 
 <div class="header">
   <h1>NCM 音乐解锁</h1>
@@ -111,14 +435,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
   <div class="settings-notice" id="hostNotice" style="display:none">
     <span class="dot"></span>
     <span>直接打开此HTML无法获取流派/年份等在线元数据。</span>
-    <strong style="margin-left:.5rem;cursor:pointer;color:var(--accent2)" onclick="showServerHint()">点击了解如何解决 →</strong>
+    <strong style="margin-left:.5rem;cursor:pointer;color:var(--accent);font-weight:600" onclick="showServerHint()">点击了解如何解决 →</strong>
   </div>
 
   <div class="results" id="results"></div>
 </div>
 
 <div class="footer">
-  所有运算均在本地浏览器完成，文件不会上传 &middot; NCM v2.1 &middot;
+  所有运算均在本地浏览器完成，文件不会上传 &middot; NCM v2.2 &middot;
   <a href="https://git.unlock-music.dev/um/web" target="_blank">参考 unlock-music</a>
 </div>
 
@@ -695,10 +1019,10 @@ function renderResults(){
     if(expanded&&detailFields.length>0){
       detailHTML='<div class="meta-detail show">'+detailFields.map(function(f){return '<div class="meta-row"><span class="meta-k">'+f[0]+'</span><span class="meta-v">'+f[1]+'</span></div>'}).join('')+'</div>';
     }else if(expanded&&detailFields.length===0){
-      detailHTML='<div class="meta-detail show"><div class="meta-row"><span class="meta-v" style="color:var(--text2)">没有更多信息</span></div></div>';
+      detailHTML='<div class="meta-detail show"><div class="meta-row"><span class="meta-v" style="color:var(--text-tertiary)">没有更多信息</span></div></div>';
     }
 
-    return '<div class="result-card"><div class="cover">'+coverHTML+'</div><div class="info"><div class="song-title">'+(r.status==='working'?'正在解密...':(r.title||r.filename))+'</div><div class="song-meta">'+(metaTags.join('')||'<span style="color:var(--text2)">等待中...</span>')+'</div>'+detailHTML+'</div><div class="right-info">'+badgeHTML+'<span class="size">'+sizeStr+'</span><div class="actions">'+actionsHTML+'</div></div></div>';
+    return '<div class="result-card"><div class="cover">'+coverHTML+'</div><div class="info"><div class="song-title">'+(r.status==='working'?'正在解密...':(r.title||r.filename))+'</div><div class="song-meta">'+(metaTags.join('')||'<span style="color:var(--text-tertiary)">等待中...</span>')+'</div>'+detailHTML+'</div><div class="right-info">'+badgeHTML+'<span class="size">'+sizeStr+'</span><div class="actions">'+actionsHTML+'</div></div></div>';
   }).join('');
   updateStatus();
 }
@@ -765,7 +1089,7 @@ function clearAll(){results.length=0;renderResults();updateStatus()}
 
 function openSettings(){
   var overlay=document.createElement('div');overlay.className='modal-overlay';
-  overlay.innerHTML='<div class="modal"><h3>⚙ 解密设定</h3><label>JOOX UUID <small style="color:var(--text2)">（仅 JOOX 文件需要）</small></label><input type="text" id="jooxUUIDInput" value="'+jooxUUID+'" maxlength="32" placeholder="32位十六进制 UUID"><div class="tip">获取方式见 <a href="https://git.unlock-music.dev/um/joox-crypto/wiki/%E8%8E%B7%E5%8F%96%E8%AE%BE%E5%A4%87-UUID" target="_blank">Wiki</a></div><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">取消</button><button class="btn-ok" id="saveSettings">确定</button></div></div>';
+  overlay.innerHTML='<div class="modal"><h3>⚙ 解密设定</h3><label>JOOX UUID <small style="color:var(--text-tertiary)">（仅 JOOX 文件需要）</small></label><input type="text" id="jooxUUIDInput" value="'+jooxUUID+'" maxlength="32" placeholder="32位十六进制 UUID"><div class="tip">获取方式见 <a href="https://git.unlock-music.dev/um/joox-crypto/wiki/%E8%8E%B7%E5%8F%96%E8%AE%BE%E5%A4%87-UUID" target="_blank">Wiki</a></div><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">取消</button><button class="btn-ok" id="saveSettings">确定</button></div></div>';
   document.body.appendChild(overlay);
   document.getElementById('saveSettings').onclick=function(){jooxUUID=document.getElementById('jooxUUIDInput').value.trim();localStorage.setItem('um_joox_uuid',jooxUUID);overlay.remove();toast('设定已保存','success')};
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove()});
@@ -799,10 +1123,34 @@ function handleFiles(files){
 
 function showServerHint(){
   var o=document.createElement('div');o.className='modal-overlay';
-  o.innerHTML='<div class="modal"><h3>⚙ 在线元数据</h3><p style="line-height:1.8;font-size:.88rem">直接双击打开的HTML文件由于浏览器安全限制（CORS），无法调用网易云API获取在线元数据。</p><p style="line-height:1.8;font-size:.88rem;margin-top:.6rem">请运行以下命令启动本地服务器：</p><pre style="background:var(--bg);padding:.8rem;border-radius:6px;margin-top:.6rem;font-size:.85rem">node server.js</pre><p style="line-height:1.8;font-size:.85rem;margin-top:.6rem;color:var(--text2)">然后打开 <strong style="color:var(--accent2)">http://localhost:3456</strong> 即可自动获取流派、年份、发行方等完整信息。</p><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div></div>';
+  o.innerHTML='<div class="modal"><h3>⚙ 在线元数据</h3><p style="line-height:1.8;font-size:.88rem">直接双击打开的HTML文件由于浏览器安全限制（CORS），无法调用网易云API获取在线元数据。</p><p style="line-height:1.8;font-size:.88rem;margin-top:.6rem">请运行以下命令启动本地服务器：</p><pre style="background:var(--bg-sunken);padding:.8rem;border-radius:var(--radius-sm);margin-top:.6rem;font-size:.85rem">node server.js</pre><p style="line-height:1.8;font-size:.85rem;margin-top:.6rem;color:var(--text-tertiary)">然后打开 <strong style="color:var(--accent)">http://localhost:3456</strong> 即可自动获取流派、年份、发行方等完整信息。</p><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div></div>';
   document.body.appendChild(o);
   o.addEventListener('click',function(e){if(e.target===o)o.remove()});
 }
+
+// ---- Theme Toggle ----
+(function(){
+  var toggle = document.getElementById('themeToggle');
+  var root = document.documentElement;
+  var theme = localStorage.getItem('um_theme') || 'auto';
+  var icons = { auto: '🌗', light: '☀️', dark: '🌙' };
+
+  function applyTheme(t) {
+    root.removeAttribute('data-theme');
+    if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t);
+    toggle.textContent = icons[t] || icons.auto;
+    localStorage.setItem('um_theme', t);
+  }
+
+  applyTheme(theme);
+
+  toggle.addEventListener('click', function() {
+    if (theme === 'auto') theme = 'dark';
+    else if (theme === 'dark') theme = 'light';
+    else theme = 'auto';
+    applyTheme(theme);
+  });
+})();
 </script>
 </body>
 </html>

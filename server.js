@@ -275,7 +275,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  ╔═══════════════════════════════════╗');
-  console.log('  ║   NCM 音乐解锁 v2.1              ║');
+  console.log('  ║   NCM 音乐解锁 v2.2              ║');
   console.log('  ║   本地服务器已启动                ║');
   console.log('  ╚═══════════════════════════════════╝');
   console.log('');

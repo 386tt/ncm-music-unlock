@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta content="webkit" name="renderer"><meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible"><meta content="width=device-width,initial-scale=1" name="viewport"><title>音乐解锁</title><meta content="音乐,解锁,ncm,qmc,mgg,mflac,qq音乐,网易云音乐,加密" name="keywords"><meta content="音乐解锁 - 在任何设备上解锁已购的加密音乐！" name="description"><style>#loader {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        z-index: 1010;
+        margin: -75px 0 0 -75px;
+        border: 16px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 16px solid #0071e3;
+        width: 120px;
+        height: 120px;
+        animation: spin 2s linear infinite;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      #loader-mask {
+        text-align: center;
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: 0;
+        z-index: 1009;
+        background-color: rgba(242, 246, 252, 0.88);
+      }
+      @media (prefers-color-scheme: dark) {
+        #loader-mask {
+          color: #fff;
+          background-color: rgba(0, 0, 0, 0.85);
+        }
+        #loader-mask a {
+          color: #ddd;
+        }
+        #loader-mask a:hover {
+          color: #0071e3;
+        }
+      }
+      #loader-source {
+        font-size: 1.5rem;
+      }
+      #loader-tips-timeout {
+        font-size: 1.2rem;
+      }</style><style>/* Apple Design Overrides */:root{--apple-blue:#0071e3;--apple-blue-hover:#0077ed;--apple-success:#34c759;--apple-warning:#ff9f0a;--apple-error:#ff3b30;--apple-radius-sm:8px;--apple-radius-md:14px;--apple-radius-full:9999px}body,#app{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','PingFang SC','Helvetica Neue',sans-serif!important;-webkit-font-smoothing:antialiased}.el-button{border-radius:var(--apple-radius-full)!important;font-weight:500!important;transition:all .25s cubic-bezier(0.25,0.1,0.25,1)!important}.el-button:active{transform:scale(0.97)!important}.el-button--primary{background-color:var(--apple-blue)!important;border-color:var(--apple-blue)!important;box-shadow:0 2px 8px rgba(0,113,227,.25)!important}.el-button--primary:hover{background-color:var(--apple-blue-hover)!important;box-shadow:0 4px 16px rgba(0,113,227,.35)!important}.el-button--default{background:rgba(0,0,0,0.04)!important;border:none!important}.el-dialog{border-radius:var(--apple-radius-md)!important;box-shadow:0 20px 60px rgba(0,0,0,.12),0 8px 20px rgba(0,0,0,.06)!important}.el-upload-dragger{border-radius:var(--apple-radius-md)!important;border:2px dashed rgba(0,0,0,.12)!important;background:rgba(255,255,255,.6)!important;backdrop-filter:blur(40px) saturate(180%)!important;-webkit-backdrop-filter:blur(40px) saturate(180%)!important;transition:all .4s cubic-bezier(0.25,0.1,0.25,1)!important}.el-upload-dragger:hover{background:rgba(0,113,227,.04)!important;border-color:var(--apple-blue)!important}.el-checkbox__input.is-checked .el-checkbox__inner,.el-radio__input.is-checked .el-radio__inner{background-color:var(--apple-blue)!important;border-color:var(--apple-blue)!important}.el-checkbox__input.is-checked+.el-checkbox__label,.el-radio__input.is-checked+.el-radio__label{color:var(--apple-blue)!important}.el-progress-bar__outer{border-radius:2px!important;background:rgba(0,0,0,.04)!important}.el-progress-bar__inner{background:var(--apple-blue)!important;border-radius:2px!important}.el-table{background:rgba(255,255,255,.6)!important;border-radius:var(--apple-radius-md)!important}.el-table th.el-table__cell{background:rgba(0,0,0,.03)!important;font-weight:600}.el-notification{border-radius:var(--apple-radius-md)!important;box-shadow:0 20px 60px rgba(0,0,0,.12)!important;backdrop-filter:blur(40px)!important}.el-tag{border-radius:var(--apple-radius-full)!important;font-weight:500}.el-input__inner{border-radius:var(--apple-radius-sm)!important}@media (prefers-color-scheme:dark){body{background-color:#000!important}#app{color:#f5f5f7!important}.el-button--default{background:rgba(255,255,255,.08)!important;color:#f5f5f7!important}.el-button--default:hover{background:rgba(255,255,255,.12)!important}.el-upload-dragger{background:rgba(255,255,255,.06)!important;border-color:rgba(255,255,255,.12)!important;color:#f5f5f7!important}.el-upload-dragger:hover{background:rgba(255,255,255,.1)!important}.el-dialog{background:rgba(30,30,30,.9)!important;backdrop-filter:blur(50px) saturate(200%)!important;color:#f5f5f7!important}.el-dialog__title{color:#f5f5f7!important}.el-table{background:#1c1c1e!important}.el-table th.el-table__cell{background:#2c2c2e!important;color:#98989d!important}.el-table td,.el-table tr{color:#f5f5f7!important;border-color:#38383a!important}.el-radio__label{color:#f5f5f7!important}.el-input__inner{background:#2c2c2e!important;border-color:#38383a!important;color:#f5f5f7!important}.el-notification{background:rgba(44,44,46,.9)!important;backdrop-filter:blur(40px)!important}}</style><link href="css/app.5388e39c.css" rel="preload" as="style"><link href="css/chunk-vendors.094863c6.css" rel="preload" as="style"><link href="js/app.e0ad8f6c.js" rel="preload" as="script"><link href="js/chunk-vendors.0c483a87.js" rel="preload" as="script"><link href="css/chunk-vendors.094863c6.css" rel="stylesheet"><link href="css/app.5388e39c.css" rel="stylesheet"><link rel="icon" type="image/png" sizes="32x32" href="./img/icons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="./img/icons/favicon-16x16.png"><link rel="manifest" href="web-manifest.json"><meta name="theme-color" content="#0071e3"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="音乐解锁"><link rel="apple-touch-icon" href="./img/icons/apple-touch-icon-152x152.png"><link rel="mask-icon" href="./img/icons/safari-pinned-tab.svg" color="#4DBA87"><meta name="msapplication-TileImage" content="./img/icons/msapplication-icon-144x144.png"><meta name="msapplication-TileColor" content="#000000"></head><body><div id="loader-mask"><div id="loader"></div><noscript><h3 id="loader-js">请启用JavaScript</h3></noscript><h3 id="loader-source">请勿直接运行源代码！</h3><div id="loader-tips-outdated" hidden><h2>您可能在使用不受支持的<span style="color: #f00">过时</span>浏览器，这可能导致此应用无法正常工作。</h2><h3>如果您使用双核浏览器，您可以尝试切换到 <span style="color: #f00">“极速模式”</span> 解决此问题。</h3><h3>或者，您可以尝试更换下方的几个浏览器之一。</h3></div><h3 id="loader-tips-timeout" hidden>音乐解锁采用了一些新特性！建议使用 <a href="https://www.microsoft.com/zh-cn/edge" target="_blank">Microsoft Edge Chromium</a> <a href="https://www.google.cn/chrome/" target="_blank">Google Chrome</a> <a href="https://www.firefox.com.cn/" target="_blank">Mozilla Firefox</a> | <a href="https://git.unlock-music.dev/um/web/wiki/使用提示" target="_blank">使用提示</a></h3></div><div id="app"></div><script src="./loader.js"></script><script src="js/chunk-vendors.0c483a87.js"></script><script src="js/app.e0ad8f6c.js"></script></body></html>
