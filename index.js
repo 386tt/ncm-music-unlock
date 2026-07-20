@@ -278,6 +278,38 @@ const findNcmFiles = (dir, recursive) =>
   findEncryptedFiles(dir, recursive).filter(f => path.extname(f).toLowerCase() === '.ncm');
 
 
+// ============ 元信息增强 ============
+
+/**
+ * 搜索并增强元信息
+ *
+ * @param {object} meta - 当前元信息 { title, artist }
+ * @param {object} [options] - 搜索选项
+ * @param {string[]} [options.providers=['itunes','netease','musicbrainz']] - 搜索平台
+ * @param {boolean} [options.auto=false] - 自动取最佳匹配，不返回 false
+ * @returns {Promise<object|null>} 选中的元信息，或 null
+ */
+async function enrichMetadata(meta, options = {}) {
+  const { providers, auto = false } = options;
+  const { searchAll, flattenResults } = require('./metadata-search');
+
+  const grouped = await searchAll(meta.title, meta.artist, { providers });
+  const allResults = flattenResults(grouped);
+
+  if (allResults.length === 0) return null;
+
+  if (auto) {
+    // 自动模式：优先 iTunes，其次 NetEase
+    const itunesResult = allResults.find(r => r.provider === 'itunes');
+    const neteaseResult = allResults.find(r => r.provider === 'netease');
+    return itunesResult || neteaseResult || allResults[0];
+  }
+
+  // 手动模式：返回所有结果供调用方处理
+  return allResults;
+}
+
+
 // ============ 导出 ============
 
 module.exports = {
@@ -287,6 +319,7 @@ module.exports = {
   detectType,
   isSupported,
   findEncryptedFiles,
+  enrichMetadata,
   // 兼容旧 API
   findNcmFiles,
   NcmDecryptor,

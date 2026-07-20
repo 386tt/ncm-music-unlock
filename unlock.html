@@ -402,6 +402,51 @@ body {
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
 @keyframes breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.5; } }
+
+/* =========================================
+   Search Modal Styles
+   ========================================= */
+.search-modal .modal { max-width: 600px; max-height: 80vh; overflow-y: auto; }
+.search-loading { text-align: center; padding: 2rem; color: var(--text-secondary); }
+.search-loading .spinner {
+  width: 32px; height: 32px; border: 3px solid var(--bg-sunken);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 1rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.search-result-card {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.85rem 1rem; border-radius: var(--radius-md);
+  background: var(--bg-sunken); margin-bottom: 0.6rem;
+  cursor: pointer; transition: all 0.2s var(--ease-spring);
+  border: 2px solid transparent;
+}
+.search-result-card:hover { background: var(--bg-elevated); box-shadow: var(--shadow-sm); }
+.search-result-card.selected { border-color: var(--accent); background: rgba(0,113,227,0.04); }
+.search-result-card .provider-badge {
+  font-size: 0.65rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-full);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  flex-shrink: 0; min-width: 48px; text-align: center;
+}
+.provider-itunes { background: rgba(252,60,68,0.12); color: #fc3c44; }
+.provider-musicbrainz { background: rgba(186,71,143,0.12); color: #ba478f; }
+.provider-netease { background: rgba(198,47,45,0.12); color: #c62f2d; }
+.provider-qqmusic { background: rgba(49,194,124,0.12); color: #31c27c; }
+.search-result-card .search-info { flex: 1; min-width: 0; }
+.search-result-card .search-info .search-title {
+  font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.search-result-card .search-info .search-detail {
+  font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.2rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.search-result-card .search-cover {
+  width: 42px; height: 42px; border-radius: 6px; background: var(--bg-sunken);
+  flex-shrink: 0; overflow: hidden;
+}
+.search-result-card .search-cover img { width: 100%; height: 100%; object-fit: cover; }
+.search-no-results { text-align: center; padding: 2rem; color: var(--text-tertiary); font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -442,7 +487,7 @@ body {
 </div>
 
 <div class="footer">
-  所有运算均在本地浏览器完成，文件不会上传 &middot; v2.3 NCM+QMC &middot;
+  所有运算均在本地浏览器完成，文件不会上传 &middot; v2.4 NCM+QMC+元信息搜索 &middot;
   <a href="https://git.unlock-music.dev/um/web" target="_blank">参考 unlock-music</a>
 </div>
 
@@ -1109,6 +1154,7 @@ async function decryptNCM(rawData,filename,callbacks={}){
 // ============================================================
 const results=[];
 let jooxUUID=localStorage.getItem('um_joox_uuid')||'';
+let _searchResults=[];  // 当前搜索结果缓存
 
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.getElementById('toastWrap').appendChild(el);setTimeout(function(){el.remove()},3000)}
 
@@ -1240,7 +1286,12 @@ async function processFile(file){
     toast(file.name + ' - ' + err.message, 'error');
   }
   renderResults();updateStatus();
-  if(entry.status==='done')toast('解锁成功: ' + entry.title, 'success');
+  if(entry.status==='done'){
+    toast('解锁成功: ' + entry.title, 'success');
+    // Auto-trigger metadata search
+    var isLocalhost=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+    if(isLocalhost){setTimeout(function(){autoSearch(idx)},500)}
+  }
 }
 
 function downloadResult(idx){
@@ -1257,6 +1308,158 @@ function downloadResult(idx){
 function removeResult(idx){results.splice(idx,1);renderResults();updateStatus()}
 function downloadAll(){var done=results.filter(function(r){return r.status==='done'});if(done.length===0){toast('没有可下载的文件','error');return}done.forEach(function(_,i){setTimeout(function(){var idx=results.indexOf(done[i]);if(idx>=0)downloadResult(idx)},i*300)});toast('开始下载 ' + done.length + ' 个文件','success')}
 function clearAll(){results.length=0;renderResults();updateStatus()}
+
+// ============================================================
+//  Metadata Search (v2.4)
+// ============================================================
+async function autoSearch(idx){
+  var r=results[idx];
+  if(!r||r.status!=='done') return;
+
+  var query=(r.artist?r.artist+' ':'')+(r.title||r.filename);
+  showSearchModal(query, idx);
+}
+
+async function showSearchModal(query, cardIdx){
+  var r=results[cardIdx];
+  var overlay=document.createElement('div'); overlay.className='modal-overlay search-modal';
+  overlay.innerHTML='<div class="modal"><h3>🔍 搜索元信息</h3><p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.5rem">"'+query+'"</p><div class="search-loading"><div class="spinner"></div>正在搜索 Apple Music / MusicBrainz / QQ音乐 / 网易云...</div></div>';
+  document.body.appendChild(overlay);
+
+  try{
+    var apiBase=location.protocol+'//'+location.host;
+    var resp=await fetch(apiBase+'/api/search?q='+encodeURIComponent(query)+'&provider=all',{signal:AbortSignal.timeout(20000)});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    var allResults=[];
+    for(var provider in data.results){
+      if(data.results[provider]){
+        for(var j=0;j<data.results[provider].length;j++){
+          allResults.push(data.results[provider][j]);
+        }
+      }
+    }
+    renderSearchResults(overlay, allResults, cardIdx, query);
+  }catch(e){
+    overlay.querySelector('.search-loading').innerHTML='<div class="search-no-results">搜索失败: '+e.message+'<br><small style="color:var(--text-tertiary)">请确认已通过 node server.js 启动本地服务器</small></div>';
+  }
+
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove()});
+}
+
+function renderSearchResults(overlay, allResults, cardIdx, query){
+  _searchResults=allResults;  // 缓存供 selectSearchResult 使用
+  var modal=overlay.querySelector('.modal');
+
+  if(allResults.length===0){
+    modal.innerHTML='<h3>🔍 搜索元信息</h3><p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.5rem">"'+query+'"</p><div class="search-no-results">未找到匹配的元信息</div><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div>';
+    return;
+  }
+
+  // Sort: itunes > netease > musicbrainz > qqmusic
+  var order={itunes:0,netease:1,musicbrainz:2,qqmusic:3};
+  allResults.sort(function(a,b){return(order[a.provider]||99)-(order[b.provider]||99)});
+
+  var html='<h3>🔍 搜索元信息</h3><p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.8rem">"'+query+'" — 找到 '+allResults.length+' 条结果</p>';
+
+  for(var i=0;i<Math.min(allResults.length,10);i++){
+    var r=allResults[i];
+    var provClass='provider-'+r.provider;
+    var provName={itunes:'Apple Music',musicbrainz:'MusicBrainz',netease:'网易云音乐',qqmusic:'QQ音乐'}[r.provider]||r.provider;
+    var details=[];
+    if(r.year)details.push(r.year);
+    if(r.album)details.push('「'+r.album+'」');
+    if(r.genre)details.push(r.genre);
+    if(r.isrc)details.push('ISRC:'+r.isrc);
+    var coverHTML=r.coverUrl?'<img src="'+r.coverUrl+'" onerror="this.style.display=\'none\'" loading="lazy">':'';
+    html+='<div class="search-result-card" onclick="selectSearchResult('+i+','+cardIdx+',this)" data-idx="'+i+'"><span class="provider-badge '+provClass+'">'+provName+'</span><div style="flex:1;min-width:0"><div class="search-title">'+r.title+' — '+r.artist+'</div><div class="search-detail">'+(details.join(' · ')||'「'+r.album+'」')+'</div></div>'+(coverHTML?'<div class="search-cover">'+coverHTML+'</div>':'')+'</div>';
+  }
+
+  html+='<div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">跳过</button></div>';
+  modal.innerHTML=html;
+}
+
+function selectSearchResult(resultIdx, cardIdx, el){
+  var overlay=el.closest('.modal-overlay');
+  var cards=overlay.querySelectorAll('.search-result-card');
+  for(var i=0;i<cards.length;i++) cards[i].classList.remove('selected');
+  el.classList.add('selected');
+
+  var selected=_searchResults[resultIdx];
+  if(!selected||!results[cardIdx]) return;
+
+  var r=results[cardIdx];
+  // Merge enriched metadata into result
+  r._enrichedMeta=selected;
+
+  // Download cover image if available
+  if(selected.coverUrl&&!r._enrichedMeta._coverBuffer){
+    var apiBase=location.protocol+'//'+location.host;
+    fetch(apiBase+'/api/proxy/image?url='+encodeURIComponent(selected.coverUrl))
+      .then(function(resp){if(resp.ok)return resp.arrayBuffer()})
+      .then(function(buf){if(buf){r._enrichedMeta._coverBuffer=new Uint8Array(buf);r.imageUrl=selected.coverUrl}})
+      .catch(function(){});
+  }
+
+  // Update display
+  if(selected.title) r.title=selected.title;
+  if(selected.artist) r.artist=selected.artist;
+  if(selected.album) r.album=selected.album;
+  if(selected.albumartist) r.albumartist=selected.albumartist;
+  if(selected.year) r.year=selected.year;
+  if(selected.genre) r.genre=selected.genre;
+  if(selected.track) r.track=selected.track;
+  if(selected.disk) r.disk=selected.disk;
+  if(selected.composer) r.composer=selected.composer;
+  if(selected.publisher) r.publisher=selected.publisher;
+  if(selected.isrc) r.isrc=selected.isrc;
+  if(selected.coverUrl) r.imageUrl=selected.coverUrl;
+
+  renderResults();
+  overlay.remove();
+  toast('✓ 已应用 ' + ({itunes:'Apple Music',musicbrainz:'MusicBrainz',netease:'网易云音乐',qqmusic:'QQ音乐'}[selected.provider]||selected.provider) + ' 元信息', 'success');
+}
+
+// Override downloadResult to use enriched metadata
+var _originalDownloadResult=downloadResult;
+downloadResult=function(idx){
+  var r=results[idx]; if(!r||r.status!=='done'||!r.audio)return;
+
+  // If enriched metadata exists, re-write tags at download time
+  var audio=r.audio;
+  if(r._enrichedMeta){
+    var tags={
+      title:r._enrichedMeta.title||r.title,
+      artist:r._enrichedMeta.artist||r.artist,
+      album:r._enrichedMeta.album||r.album,
+      albumartist:r._enrichedMeta.albumartist||r.albumartist,
+      year:r._enrichedMeta.year||r.year,
+      genre:r._enrichedMeta.genre||r.genre,
+      track:r._enrichedMeta.track||r.track,
+      disk:r._enrichedMeta.disk||r.disk,
+      composer:r._enrichedMeta.composer||r.composer,
+      publisher:r._enrichedMeta.publisher||r.publisher,
+      copyright:r._enrichedMeta.copyright||r.copyright,
+      comment:r._enrichedMeta.comment||r.comment,
+      isrc:r._enrichedMeta.isrc||r.isrc,
+      bpm:r._enrichedMeta.bpm||r.bpm,
+      picture:r._enrichedMeta._coverBuffer||r.image
+    };
+    audio=writeMetadata(r.audio,tags,r.format);
+
+    // Update display name
+    if(r._enrichedMeta.title) r.title=r._enrichedMeta.title;
+    if(r._enrichedMeta.artist) r.artist=r._enrichedMeta.artist;
+  }
+
+  var ar=(r.artist||'').replace(/[\\/:*?"<>|]/g,'_');
+  var ti=(r.title||r.filename).replace(/[\\/:*?"<>|]/g,'_');
+  var fn=ar?ar+' - '+ti+'.'+r.format:ti+'.'+r.format;
+  var blob=new Blob([audio],{type:r.mime||'audio/mpeg'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=fn;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+};
 
 function openSettings(){
   var overlay=document.createElement('div');overlay.className='modal-overlay';

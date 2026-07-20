@@ -24,33 +24,37 @@ const NodeID3 = require('node-id3');
  * @returns {Buffer} 写入元数据后的 MP3 数据
  */
 function writeMP3Metadata(audioData, meta) {
-  // 先尝试移除已有的 ID3 标签以避免重复
-  // node-id3 的 update 方法会自动处理
-
   const tags = {
-    title: meta.title || '',
-    artist: Array.isArray(meta.artist) ? meta.artist.join('; ') : (meta.artist || ''),
-    album: meta.album || '',
+    title:        meta.title       || '',
+    artist:       Array.isArray(meta.artist) ? meta.artist.join('; ') : (meta.artist || ''),
+    album:        meta.album       || '',
+    performerInfo:meta.albumartist || '',
+    year:         meta.year        || '',
+    genre:        meta.genre       || '',
+    trackNumber:  meta.track       || '',
+    partOfSet:    meta.disk        || '',
+    composer:     meta.composer    || '',
+    publisher:    meta.publisher   || '',
+    copyright:    meta.copyright   || '',
+    encodedBy:    meta.encodedby   || '',
+    textWriter:   meta.lyricist    || '',
+    bpm:          meta.bpm         || '',
+    isrc:         meta.isrc        || '',
+    comment:      { language: 'eng', text: meta.comment || '' },
   };
 
   // 添加封面图
   if (meta.picture && meta.picture.length > 0) {
     tags.image = {
       mime: detectImageMime(meta.picture),
-      type: {
-        id: 3, // 封面图（front cover）
-        name: 'front cover',
-      },
+      type: { id: 3, name: 'front cover' },
       description: 'Cover',
       imageBuffer: meta.picture,
     };
   }
 
-  // 使用 node-id3 写入标签（会自动处理已有的标签）
-  // write 方法返回写入后的完整 buffer
-  const result = NodeID3.write(tags, audioData);
-
-  return result;
+  // 写入（自动处理已有标签）
+  return NodeID3.write(tags, audioData);
 }
 
 /**
@@ -209,45 +213,29 @@ function writeFLACMetadata(audioData, meta) {
 
 /**
  * 构建 Vorbis Comment 元数据块
- *
- * 格式：
- *   4 字节 LE: vendor 字符串长度
- *   vendor 字符串
- *   4 字节 LE: 注释数量
- *   每个注释:
- *     4 字节 LE: 注释长度
- *     注释内容 "KEY=VALUE"
  */
 function buildVorbisCommentBlock(meta) {
   const vendor = 'reference libFLAC 1.3.2 20170101';
   const vendorBuf = Buffer.from(vendor, 'utf8');
 
-  // 构建注释列表
   const comments = [];
 
-  if (meta.title) {
-    comments.push(Buffer.from(`TITLE=${meta.title}`, 'utf8'));
-  }
+  if (meta.title)       comments.push(Buffer.from(`TITLE=${meta.title}`, 'utf8'));
   if (meta.artist) {
-    const artistStr = Array.isArray(meta.artist)
-      ? meta.artist.join('; ')
-      : meta.artist;
-    comments.push(Buffer.from(`ARTIST=${artistStr}`, 'utf8'));
+    const ar = Array.isArray(meta.artist) ? meta.artist.join('; ') : meta.artist;
+    comments.push(Buffer.from(`ARTIST=${ar}`, 'utf8'));
   }
-  if (meta.album) {
-    comments.push(Buffer.from(`ALBUM=${meta.album}`, 'utf8'));
-  }
-  if (meta.date) {
-    comments.push(Buffer.from(`DATE=${meta.date}`, 'utf8'));
-  }
-  if (meta.trackNumber) {
-    comments.push(Buffer.from(`TRACKNUMBER=${meta.trackNumber}`, 'utf8'));
-  }
-  if (meta.genre) {
-    comments.push(Buffer.from(`GENRE=${meta.genre}`, 'utf8'));
-  }
+  if (meta.album)       comments.push(Buffer.from(`ALBUM=${meta.album}`, 'utf8'));
+  if (meta.albumartist) comments.push(Buffer.from(`ALBUMARTIST=${meta.albumartist}`, 'utf8'));
+  if (meta.genre)       comments.push(Buffer.from(`GENRE=${meta.genre}`, 'utf8'));
+  if (meta.year)        comments.push(Buffer.from(`DATE=${meta.year}`, 'utf8'));
+  if (meta.track)       comments.push(Buffer.from(`TRACKNUMBER=${meta.track}`, 'utf8'));
+  if (meta.disk)        comments.push(Buffer.from(`DISCNUMBER=${meta.disk}`, 'utf8'));
+  if (meta.composer)    comments.push(Buffer.from(`COMPOSER=${meta.composer}`, 'utf8'));
+  if (meta.publisher)   comments.push(Buffer.from(`PUBLISHER=${meta.publisher}`, 'utf8'));
+  if (meta.copyright)   comments.push(Buffer.from(`COPYRIGHT=${meta.copyright}`, 'utf8'));
+  if (meta.comment)     comments.push(Buffer.from(`DESCRIPTION=${meta.comment}`, 'utf8'));
 
-  // 如果没有元数据，至少添加一个空注释
   if (comments.length === 0) {
     comments.push(Buffer.from('', 'utf8'));
   }

@@ -42,6 +42,29 @@ function fetchAlbumDetail(albumId) {
   return neteaseRequest('/api/album/' + albumId);
 }
 
+/**
+ * 下载图片并返回 Buffer
+ */
+function downloadImage(imageUrl) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(imageUrl);
+    const client = parsed.protocol === 'https:' ? https : http;
+
+    client.get(imageUrl, { timeout: 15000 }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return downloadImage(res.headers.location).then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
 function neteaseRequest(apiPath, method, body, extraHeaders) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -194,10 +217,70 @@ async function handleAPI(reqPath, res) {
       return;
     }
 
+    // GET /api/search?q=关键词&provider=all|musicbrainz|itunes|netease|qqmusic
+    if (reqPath.startsWith('/api/search')) {
+      const parsed = url.parse(reqPath, true);
+      const q = parsed.query.q || '';
+      const provider = parsed.query.provider || 'all';
+
+      if (!q.trim()) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '缺少 q 参数（搜索关键词）' }));
+        return;
+      }
+
+      const { searchByProvider, searchAll } = require('./metadata-search');
+      let results;
+
+      if (provider === 'all') {
+        results = await searchAll(q);
+      } else {
+        const items = await searchByProvider(provider, q);
+        results = { [provider]: items };
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ provider, results }));
+      return;
+    }
+
+    // GET /api/proxy/image?url=... — 代理下载封面图
+    if (reqPath.startsWith('/api/proxy/image')) {
+      const parsed = url.parse(reqPath, true);
+      const imageUrl = parsed.query.url;
+
+      if (!imageUrl) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: '缺少 url 参数' }));
+        return;
+      }
+
+      try {
+        const imgData = await downloadImage(imageUrl);
+        // 检测 MIME 类型
+        let contentType = 'image/jpeg';
+        if (imgData[0] === 0x89 && imgData[1] === 0x50) contentType = 'image/png';
+        else if (imgData[0] === 0x47 && imgData[1] === 0x49) contentType = 'image/gif';
+        else if (imgData[0] === 0x52 && imgData[1] === 0x49) contentType = 'image/webp';
+
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Content-Length': imgData.length,
+          'Cache-Control': 'public, max-age=86400',
+        });
+        res.end(imgData);
+      } catch (e) {
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: '图片下载失败: ' + e.message }));
+      }
+      return;
+    }
+
     // 404
     res.writeHead(404);
     res.end('Not Found');
   } catch (e) {
+    console.error('API error:', e);
     res.writeHead(500);
     res.end(JSON.stringify({ error: e.message }));
   }
