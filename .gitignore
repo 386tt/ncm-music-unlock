@@ -5,3 +5,5 @@ test-output.*
 _test_script.js
 .DS_Store
 Thumbs.db
+qmc.v1.stream
+.claude/settings.local.json

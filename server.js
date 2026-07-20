@@ -1,8 +1,8 @@
 /**
- * NCM 解锁本地服务器
+ * 音乐解锁本地服务器
  *
  * 功能：
- * 1. 提供 HTML GUI 界面
+ * 1. 提供 HTML GUI 界面（支持 NCM + QMC/QQ音乐）
  * 2. 代理网易云 API 请求（解决浏览器 CORS 限制）
  * 3. 获取完整元数据（流派、年份、发行方、作曲者 等）
  *
@@ -259,11 +259,47 @@ function serveStatic(reqPath, res) {
   }
 }
 
+/**
+ * 提供 node_modules 中的文件（用于 QMC WASM 等资源）
+ */
+function serveNodeModules(res, relPath) {
+  const filePath = path.join(__dirname, 'node_modules', relPath);
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
+
+    let contentType = 'application/octet-stream';
+    if (relPath.endsWith('.wasm')) contentType = 'application/wasm';
+    else if (relPath.endsWith('.js')) contentType = 'application/javascript';
+
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stat.size,
+      'Cache-Control': 'public, max-age=3600',
+    });
+    fs.createReadStream(filePath).pipe(res);
+  } catch (e) {
+    res.writeHead(404);
+    res.end('Not Found');
+  }
+}
+
 // ============ 启动服务器 ============
 
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url);
   const reqPath = parsed.pathname;
+
+  // 为浏览器提供 QMC WASM 和 Legacy JS 文件
+  if (reqPath.endsWith('/QmcWasm.wasm') || reqPath.endsWith('/QmcLegacy.js') || reqPath.endsWith('/QmcWasmBundle.js')) {
+    const wasmFile = reqPath.split('/').pop();
+    serveNodeModules(res, `@xhacker/qmcwasm/${wasmFile}`);
+    return;
+  }
 
   if (reqPath.startsWith('/api/')) {
     handleAPI(reqPath + (parsed.search || ''), res);
@@ -275,14 +311,15 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  ╔═══════════════════════════════════╗');
-  console.log('  ║   NCM 音乐解锁 v2.2              ║');
+  console.log('  ║   音乐解锁 v2.3                  ║');
   console.log('  ║   本地服务器已启动                ║');
   console.log('  ╚═══════════════════════════════════╝');
   console.log('');
   console.log(`  打开浏览器访问:  http://localhost:${PORT}`);
   console.log('');
   console.log('  支持功能：');
-  console.log('  - 拖拽 .ncm 文件解锁');
+  console.log('  - 拖拽 .ncm 文件解锁（网易云音乐）');
+  console.log('  - 拖拽 .qmc* / .mflac / .mgg 文件解锁（QQ 音乐）');
   console.log('  - 自动获取网易云完整元数据');
   console.log('    （流派、年份、发行方、作曲者 等）');
   console.log('  - 元数据写回 MP3/FLAC 文件');

@@ -1,13 +1,16 @@
 /**
- * NCM 解锁主模块
+ * 音乐解锁主模块
  *
- * 整合解密和元数据写入，提供简洁的 API 接口。
+ * 整合解密和元数据写入，支持多种加密格式：
+ * - NCM (网易云音乐) : .ncm
+ * - QMC (QQ 音乐)   : .qmc0/.qmc1/.qmc3/.qmcogg/.qmcflac/.mgg/.mflac/.qmcmp3
  *
  * 用法：
  *   const { unlock, unlockToFile } = require('./index');
  *
  *   // 解锁文件并保存
- *   await unlockToFile('song.ncm', 'song.mp3');
+ *   await unlockToFile('song.ncm');
+ *   await unlockToFile('song.mflac');
  *
  *   // 或获取解密后的数据
  *   const result = await unlock('song.ncm');
@@ -16,7 +19,7 @@
  *   // result.artist  → 歌手名
  *   // result.album   → 专辑名
  *   // result.format  → 音频格式
- *   // result.imageBuffer → 封面图 Buffer
+ *   // result.image   → 封面图 Buffer
  */
 
 'use strict';
@@ -24,38 +27,79 @@
 const fs = require('fs');
 const path = require('path');
 const { NcmDecryptor, detectAudioFormat } = require('./ncm-decrypt');
+const { QmcDecryptor, SUPPORTED_EXTENSIONS: QMC_EXTENSIONS } = require('./qmc-decrypt');
 const { writeMetadata } = require('./meta-writer');
 
 
+// ============ 格式检测 ============
+
 /**
- * 解锁 NCM 文件
+ * 根据文件扩展名判断加密类型
+ * @param {string} filePath - 文件路径
+ * @returns {'ncm'|'qmc'|null} 加密类型
+ */
+function detectType(filePath) {
+  const ext = path.extname(filePath).toLowerCase().replace('.', '');
+  if (ext === 'ncm') return 'ncm';
+  if (QMC_EXTENSIONS.includes(ext)) return 'qmc';
+  return null;
+}
+
+/**
+ * 检查文件是否为支持的加密格式
+ */
+function isSupported(filePath) {
+  return detectType(filePath) !== null;
+}
+
+
+// ============ 核心解锁 API ============
+
+/**
+ * 解锁加密音乐文件
  *
- * @param {string|Buffer} input - NCM 文件路径或 Buffer
+ * @param {string|Buffer} input - 加密文件路径或 Buffer
  * @param {object} [options] - 额外选项
  * @param {boolean} [options.writeMeta=true] - 是否写入元数据
- * @param {boolean} [options.downloadCover=true] - 是否下载封面图
+ * @param {string} [options.type] - 强制指定加密类型（'ncm' 或 'qmc'）
  * @returns {Promise<object>} 解密结果
  */
 async function unlock(input, options = {}) {
   const {
-    writeMeta = true,
+    writeMeta: doWriteMeta = true,
   } = options;
 
   // 读取文件
-  let buffer, filename;
+  let buffer, filename, fileType;
   if (typeof input === 'string') {
     buffer = fs.readFileSync(input);
-    filename = path.basename(input, path.extname(input));
+    filename = path.basename(input);
+    fileType = options.type || detectType(input);
+    if (!fileType) {
+      throw new Error(`不支持的加密格式: ${path.extname(input)}。支持: .ncm, .qmc0, .qmc1, .qmc3, .qmcflac, .qmcogg, .mflac, .mgg, .qmcmp3`);
+    }
   } else if (Buffer.isBuffer(input)) {
     buffer = input;
-    filename = 'unknown';
+    filename = options.filename || 'unknown';
+    if (!options.type) {
+      throw new TypeError('Buffer 输入时必须通过 options.type 指定加密类型 ("ncm" 或 "qmc")');
+    }
+    fileType = options.type;
   } else {
     throw new TypeError('input 必须是文件路径 (string) 或 Buffer');
   }
 
-  // 解密
-  const decryptor = new NcmDecryptor(buffer, filename);
-  const result = await decryptor.decrypt();
+  // 执行解密
+  let result;
+  if (fileType === 'ncm') {
+    const decryptor = new NcmDecryptor(buffer, filename);
+    result = await decryptor.decrypt();
+  } else if (fileType === 'qmc') {
+    const decryptor = new QmcDecryptor(buffer, filename);
+    result = await decryptor.decrypt();
+  } else {
+    throw new Error(`未知的加密类型: ${fileType}`);
+  }
 
   // 检测/确认音频格式
   if (!result.format) {
@@ -63,7 +107,7 @@ async function unlock(input, options = {}) {
   }
 
   // 写入元数据
-  if (writeMeta && result.audio) {
+  if (doWriteMeta && result.audio) {
     console.log('  写入元数据...');
     const audioWithMeta = writeMetadata(result.audio, {
       title: result.title,
@@ -88,10 +132,11 @@ async function unlock(input, options = {}) {
   return result;
 }
 
+
 /**
- * 解锁 NCM 文件并保存到文件
+ * 解锁加密文件并保存
  *
- * @param {string} inputPath - NCM 文件路径
+ * @param {string} inputPath - 加密文件路径
  * @param {string} [outputPath] - 输出文件路径（可选，默认自动生成）
  * @param {object} [options] - 额外选项
  * @returns {Promise<string>} 输出文件路径
@@ -103,7 +148,8 @@ async function unlockToFile(inputPath, outputPath, options = {}) {
     throw new Error(`文件不存在: ${absInput}`);
   }
 
-  console.log(`\n解锁: ${path.basename(absInput)}`);
+  const fileType = detectType(absInput);
+  console.log(`\n解锁: ${path.basename(absInput)} [${fileType.toUpperCase()}]`);
 
   const result = await unlock(absInput, options);
 
@@ -136,7 +182,7 @@ async function unlockToFile(inputPath, outputPath, options = {}) {
 
   // 打印元信息摘要
   console.log(`  格式: ${result.format.toUpperCase()}`);
-  console.log(`  标题: ${result.title}`);
+  if (result.title) console.log(`  标题: ${result.title}`);
   if (result.artist) console.log(`  歌手: ${result.artist}`);
   if (result.album) console.log(`  专辑: ${result.album}`);
   if (result.image) console.log(`  封面: ${(result.image.length / 1024).toFixed(1)} KB`);
@@ -145,8 +191,9 @@ async function unlockToFile(inputPath, outputPath, options = {}) {
   return outPath;
 }
 
+
 /**
- * 批量解锁目录中的 NCM 文件
+ * 批量解锁目录中的加密文件
  *
  * @param {string} dirPath - 目录路径
  * @param {object} [options] - 额外选项
@@ -165,26 +212,27 @@ async function unlockDirectory(dirPath, options = {}) {
     throw new Error(`目录不存在: ${absDir}`);
   }
 
-  // 查找 NCM 文件
-  const ncmFiles = findNcmFiles(absDir, recursive);
-  if (ncmFiles.length === 0) {
-    console.log('未找到 .ncm 文件');
+  // 查找所有支持的加密文件
+  const encryptedFiles = findEncryptedFiles(absDir, recursive);
+  if (encryptedFiles.length === 0) {
+    console.log('未找到加密文件（支持 .ncm, .qmc*, .mflac, .mgg 等）');
     return [];
   }
 
-  console.log(`找到 ${ncmFiles.length} 个 .ncm 文件\n`);
+  console.log(`找到 ${encryptedFiles.length} 个加密文件\n`);
 
   const results = [];
   let successCount = 0;
   let failCount = 0;
 
-  for (let i = 0; i < ncmFiles.length; i++) {
-    const filePath = ncmFiles[i];
-    console.log(`[${i + 1}/${ncmFiles.length}] ${path.basename(filePath)}`);
+  for (let i = 0; i < encryptedFiles.length; i++) {
+    const filePath = encryptedFiles[i];
+    const fileType = detectType(filePath);
+    console.log(`[${i + 1}/${encryptedFiles.length}] ${path.basename(filePath)} [${fileType.toUpperCase()}]`);
 
     try {
       const outPath = outputDir
-        ? path.join(outputDir, path.basename(filePath, '.ncm') + '.mp3')
+        ? path.join(outputDir, path.basename(filePath, path.extname(filePath)) + '.mp3')
         : undefined;
       const out = await unlockToFile(filePath, outPath, options);
       results.push({ success: true, input: filePath, output: out });
@@ -202,18 +250,19 @@ async function unlockDirectory(dirPath, options = {}) {
   return results;
 }
 
+
 /**
- * 递归查找目录中的 NCM 文件
+ * 递归查找目录中所有支持的加密文件
  */
-function findNcmFiles(dir, recursive) {
+function findEncryptedFiles(dir, recursive) {
   const results = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory() && recursive) {
-      results.push(...findNcmFiles(fullPath, recursive));
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.ncm')) {
+      results.push(...findEncryptedFiles(fullPath, recursive));
+    } else if (entry.isFile() && isSupported(entry.name)) {
       results.push(fullPath);
     }
   }
@@ -222,9 +271,24 @@ function findNcmFiles(dir, recursive) {
 }
 
 
+// ============ 兼容旧 API ============
+
+// 保持向后兼容的别名
+const findNcmFiles = (dir, recursive) =>
+  findEncryptedFiles(dir, recursive).filter(f => path.extname(f).toLowerCase() === '.ncm');
+
+
+// ============ 导出 ============
+
 module.exports = {
   unlock,
   unlockToFile,
   unlockDirectory,
+  detectType,
+  isSupported,
+  findEncryptedFiles,
+  // 兼容旧 API
+  findNcmFiles,
   NcmDecryptor,
+  QmcDecryptor,
 };

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NCM 音乐解锁</title>
+<title>音乐解锁 — NCM · QQ音乐</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -409,16 +409,16 @@ body {
 <button class="theme-toggle" id="themeToggle" title="切换浅色/暗色模式" aria-label="切换浅色/暗色模式">☀️</button>
 
 <div class="header">
-  <h1>NCM 音乐解锁</h1>
-  <p>在浏览器中解锁网易云音乐 .ncm 文件，完整保留元信息</p>
+  <h1>音乐解锁</h1>
+  <p>在浏览器中解锁网易云音乐 .ncm 和 QQ 音乐 .qmc*/.mflac/.mgg 加密文件，完整保留元信息</p>
 </div>
 
 <div class="container">
   <div class="drop-zone" id="dropZone">
     <div class="icon">📂</div>
-    <div class="title">点击选择或拖拽 .ncm 文件到此处</div>
-    <div class="hint">支持批量处理，所有运算均在本地完成，不会上传您的文件</div>
-    <input type="file" id="fileInput" multiple accept=".ncm">
+    <div class="title">点击选择或拖拽加密音乐文件到此处</div>
+    <div class="hint">支持 .ncm / .qmc* / .mflac / .mgg — 所有运算均在本地完成，不会上传您的文件</div>
+    <input type="file" id="fileInput" multiple accept=".ncm,.qmc0,.qmc1,.qmc3,.qmcogg,.qmcflac,.mflac,.mgg,.qmcmp3">
   </div>
 
   <div class="status-bar" id="statusBar" style="display:none">
@@ -434,7 +434,7 @@ body {
 
   <div class="settings-notice" id="hostNotice" style="display:none">
     <span class="dot"></span>
-    <span>直接打开此HTML无法获取流派/年份等在线元数据。</span>
+    <span>直接打开此HTML无法加载 QMC 解密引擎和获取在线元数据。</span>
     <strong style="margin-left:.5rem;cursor:pointer;color:var(--accent);font-weight:600" onclick="showServerHint()">点击了解如何解决 →</strong>
   </div>
 
@@ -442,11 +442,37 @@ body {
 </div>
 
 <div class="footer">
-  所有运算均在本地浏览器完成，文件不会上传 &middot; NCM v2.2 &middot;
+  所有运算均在本地浏览器完成，文件不会上传 &middot; v2.3 NCM+QMC &middot;
   <a href="https://git.unlock-music.dev/um/web" target="_blank">参考 unlock-music</a>
 </div>
 
 <div class="toast-wrap" id="toastWrap"></div>
+
+<!-- QMC 解密引擎（纯 JS，无需 WASM） -->
+<script>
+  // 为 QmcLegacy.js 提供 CommonJS shim
+  var exports = {};
+  var module = { exports: {} };
+</script>
+<script src="QmcLegacy.js" onerror="window.__qmcAvailable=false;console.warn('QMC 解密引擎加载失败，将仅支持 NCM 格式')"></script>
+<script>
+  // 从模块系统中提取 QMC 解密引擎
+  var QmcCryptoModule = null;
+  var __qmcAvailable = true;
+  (function() {
+    if (typeof module !== 'undefined' && module.exports && typeof module.exports === 'function') {
+      QmcCryptoModule = module.exports;
+    } else if (typeof exports !== 'undefined' && exports.QmcCryptoModule) {
+      QmcCryptoModule = exports.QmcCryptoModule;
+    } else if (typeof QmcCryptoModuleGlobal !== 'undefined') {
+      // 有些构建版本直接挂到全局
+      QmcCryptoModule = QmcCryptoModuleGlobal;
+    } else {
+      __qmcAvailable = false;
+      console.warn('[QMC] 无法提取解密引擎，module.exports type:', typeof module.exports);
+    }
+  })();
+</script>
 
 <script>
 // ============================================================
@@ -761,6 +787,132 @@ function writeMetadata(audioData, tags, format){
 }
 
 // ============================================================
+//  QMC Decryption (QQ 音乐)
+// ============================================================
+const QMC_EXT_MAP = {
+  'qmc0':'mp3','qmc1':'mp3','qmc3':'mp3','qmcmp3':'mp3',
+  'qmcflac':'flac','qmcogg':'ogg','mflac':'flac','mgg':'ogg',
+  'mflac0':'flac','mgg1':'ogg'
+};
+const QMC_CHUNK_SIZE = 0x100000; // 1MB chunks
+
+function getQmcExt(filename){
+  const ext = filename.split('.').pop().toLowerCase();
+  return QMC_EXT_MAP[ext] || 'mp3';
+}
+
+function isQmcFile(filename){
+  const ext = filename.split('.').pop().toLowerCase();
+  return ext in QMC_EXT_MAP;
+}
+
+async function decryptQMC(rawData, filename, callbacks){
+  if (!__qmcAvailable || !QmcCryptoModule) {
+    var reason = '';
+    if (typeof module === 'undefined') reason = ' (module 未定义)';
+    else if (!module.exports) reason = ' (module.exports 为空)';
+    else if (typeof module.exports !== 'function') reason = ' (module.exports type=' + typeof module.exports + ')';
+    else if (!QmcCryptoModule) reason = ' (QmcCryptoModule 赋值失败)';
+    throw new Error('QMC 解密引擎未加载' + reason + '。请通过本地服务器打开本页面：node server.js');
+  }
+
+  const totalLen = rawData.byteLength;
+  const raw = new Uint8Array(rawData);
+
+  callbacks.onProgress && callbacks.onProgress(5);
+
+  // 初始化 QMC 解密引擎
+  const qmc = await QmcCryptoModule();
+  callbacks.onProgress && callbacks.onProgress(10);
+
+  // 确定原始音频扩展名
+  const audioExt = getQmcExt(filename);
+
+  // 读取文件尾部用于密钥提取
+  const tailSize = Math.min(QMC_CHUNK_SIZE, totalLen);
+  const tailData = raw.slice(totalLen - tailSize);
+
+  const tailPtr = qmc._malloc(tailSize);
+  qmc.writeArrayToMemory(tailData, tailPtr);
+
+  const footerSize = qmc.preDec(tailPtr, tailSize, '.' + audioExt);
+  if (footerSize === -1) {
+    qmc._free(tailPtr);
+    throw new Error('QMC 密钥提取失败：' + (qmc.getErr ? qmc.getErr() : '文件格式不支持或已损坏'));
+  }
+
+  // 获取歌曲 ID
+  const songIdStr = qmc.getSongId ? qmc.getSongId() : '0';
+  const songId = (songIdStr === '0' || songIdStr === '') ? 0 : parseInt(songIdStr, 10);
+
+  callbacks.onProgress && callbacks.onProgress(15);
+  callbacks.onMeta && callbacks.onMeta({ musicId: songId, format: audioExt });
+
+  // 解密音频数据
+  const audioSize = totalLen - footerSize;
+  const workPtr = qmc._malloc(QMC_CHUNK_SIZE);
+  const chunks = [];
+  let offset = 0;
+  let remaining = audioSize;
+  let lastPct = 15;
+
+  while (remaining > 0) {
+    const chunkSize = Math.min(remaining, QMC_CHUNK_SIZE);
+    const chunkData = raw.slice(offset, offset + chunkSize);
+
+    qmc.writeArrayToMemory(chunkData, workPtr);
+    const decryptedLen = qmc.decBlob(workPtr, chunkSize, offset);
+    chunks.push(new Uint8Array(qmc.HEAPU8.slice(workPtr, workPtr + decryptedLen)));
+
+    offset += chunkSize;
+    remaining -= chunkSize;
+
+    const pct = 15 + Math.floor((offset / audioSize) * 80);
+    if (pct > lastPct) { lastPct = pct; callbacks.onProgress && callbacks.onProgress(pct); }
+  }
+
+  qmc._free(tailPtr);
+  qmc._free(workPtr);
+
+  callbacks.onProgress && callbacks.onProgress(95);
+
+  // 合并并检测格式
+  const totalLenDecrypted = chunks.reduce((s, c) => s + c.length, 0);
+  const audio = new Uint8Array(totalLenDecrypted);
+  let pos = 0;
+  for (const c of chunks) { audio.set(c, pos); pos += c.length; }
+
+  const format = detectAudioFormat(audio);
+  const id3Tags = parseID3v2(audio);
+  const fallback = parseFilename(filename);
+
+  const title = id3Tags?.title || fallback.title;
+  const artist = id3Tags?.artist || fallback.artist;
+  const album = id3Tags?.album || '';
+
+  callbacks.onProgress && callbacks.onProgress(100);
+
+  return {
+    title, artist, artists: artist ? [[artist]] : [],
+    album, albumartist: id3Tags?.albumartist || artist,
+    year: id3Tags?.year || '',
+    genre: id3Tags?.genre || '',
+    track: id3Tags?.track || '',
+    disk: id3Tags?.disk || '',
+    composer: id3Tags?.composer || '',
+    publisher: id3Tags?.publisher || '',
+    copyright: id3Tags?.copyright || '',
+    comment: id3Tags?.comment || '',
+    isrc: id3Tags?.isrc || '',
+    bpm: id3Tags?.bpm || '',
+    subType: '',
+    format, mime: MIME_TYPES[format] || 'audio/mpeg',
+    audio, image: null, imageUrl: null,
+    rawMeta: { musicId: songId }, id3Tags, onlineMeta: null
+  };
+}
+
+// ============================================================
 //  NCM Constants
 // ============================================================
 const NCM_MAGIC=[0x43,0x54,0x45,0x4e,0x46,0x44,0x41,0x4d];
@@ -1029,19 +1181,38 @@ function renderResults(){
 
 async function processFile(file){
   const idx=results.length;
-  const entry={filename:file.name,title:file.name.replace(/\.ncm$/i,''),artist:'',album:'',albumartist:'',year:'',genre:'',track:'',disk:'',composer:'',publisher:'',copyright:'',comment:'',isrc:'',bpm:'',subType:'',format:'mp3',imageUrl:null,audio:null,image:null,status:'working'};
+  const entry={filename:file.name,title:file.name.replace(/\.[^.]+$/i,''),artist:'',album:'',albumartist:'',year:'',genre:'',track:'',disk:'',composer:'',publisher:'',copyright:'',comment:'',isrc:'',bpm:'',subType:'',format:'mp3',imageUrl:null,audio:null,image:null,status:'working'};
+  const isQmc = isQmcFile(file.name);
+  const isNcm = file.name.toLowerCase().endsWith('.ncm');
   results.push(entry);renderResults();updateStatus();
+
   try{
     const rawData=await file.arrayBuffer();
-    const result=await decryptNCM(rawData,file.name,{
-      onProgress(pct){},
-      onMeta(meta){
-        if(meta.albumPic)entry.imageUrl=meta.albumPic;
-        if(meta.musicName)entry.title=meta.musicName;
-        entry.album=meta.album||entry.album;
-        renderResults();
-      }
-    });
+    let result;
+
+    if (isQmc) {
+      // QMC / QQ音乐 解密
+      result = await decryptQMC(rawData, file.name, {
+        onProgress(pct){},
+        onMeta(meta){
+          if (meta.format) entry.format = meta.format;
+          renderResults();
+        }
+      });
+    } else if (isNcm) {
+      // NCM / 网易云音乐 解密
+      result = await decryptNCM(rawData, file.name, {
+        onProgress(pct){},
+        onMeta(meta){
+          if(meta.albumPic)entry.imageUrl=meta.albumPic;
+          if(meta.musicName)entry.title=meta.musicName;
+          entry.album=meta.album||entry.album;
+          renderResults();
+        }
+      });
+    } else {
+      throw new Error('不支持的加密格式: ' + file.name);
+    }
 
     const tags={
       title:result.title,artist:result.artist,album:result.album,
@@ -1106,24 +1277,27 @@ dropZone.addEventListener('drop',(e)=>{e.preventDefault();dropZone.classList.rem
 fileInput.addEventListener('change',()=>{handleFiles(fileInput.files);fileInput.value=''});
 
 function handleFiles(files){
-  const ncmFiles=[];for(const f of files){if(f.name.toLowerCase().endsWith('.ncm'))ncmFiles.push(f)}
-  if(ncmFiles.length===0){toast('请选择 .ncm 文件','error');return}
-  toast('已添加 ' + ncmFiles.length + ' 个文件', 'success');
-  for(var i=0;i<ncmFiles.length;i++)processFile(ncmFiles[i]);
+  const encryptedFiles=[];for(const f of files){if(f.name.toLowerCase().endsWith('.ncm')||isQmcFile(f.name))encryptedFiles.push(f)}
+  if(encryptedFiles.length===0){toast('请选择 .ncm / .qmc* / .mflac / .mgg 等加密音乐文件','error');return}
+  if(!__qmcAvailable&&encryptedFiles.some(function(f){return isQmcFile(f.name)})){
+    document.getElementById('hostNotice').style.display='flex';
+  }
+  toast('已添加 ' + encryptedFiles.length + ' 个文件', 'success');
+  for(var i=0;i<encryptedFiles.length;i++)processFile(encryptedFiles[i]);
 }
 
 // ---- Detect if served from localhost or opened via file:// ----
 (function(){
   const isLocalhost = location.hostname==='localhost'||location.hostname==='127.0.0.1';
   const isFile = location.protocol==='file:';
-  if(!isLocalhost&&isFile){
+  if(!isLocalhost&&(isFile||!__qmcAvailable)){
     document.getElementById('hostNotice').style.display='flex';
   }
 })();
 
 function showServerHint(){
   var o=document.createElement('div');o.className='modal-overlay';
-  o.innerHTML='<div class="modal"><h3>⚙ 在线元数据</h3><p style="line-height:1.8;font-size:.88rem">直接双击打开的HTML文件由于浏览器安全限制（CORS），无法调用网易云API获取在线元数据。</p><p style="line-height:1.8;font-size:.88rem;margin-top:.6rem">请运行以下命令启动本地服务器：</p><pre style="background:var(--bg-sunken);padding:.8rem;border-radius:var(--radius-sm);margin-top:.6rem;font-size:.85rem">node server.js</pre><p style="line-height:1.8;font-size:.85rem;margin-top:.6rem;color:var(--text-tertiary)">然后打开 <strong style="color:var(--accent)">http://localhost:3456</strong> 即可自动获取流派、年份、发行方等完整信息。</p><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div></div>';
+  o.innerHTML='<div class="modal"><h3>⚙ 完整功能需要本地服务器</h3><p style="line-height:1.8;font-size:.88rem">直接双击打开的HTML文件由于浏览器安全限制（CORS），无法：</p><p style="line-height:1.8;font-size:.85rem;margin:.4rem 0">• 加载 QMC 解密引擎（QQ音乐解密）<br>• 调用网易云API获取在线元数据</p><p style="line-height:1.8;font-size:.88rem;margin-top:.6rem">请运行以下命令启动本地服务器：</p><pre style="background:var(--bg-sunken);padding:.8rem;border-radius:var(--radius-sm);margin-top:.6rem;font-size:.85rem">node server.js</pre><p style="line-height:1.8;font-size:.85rem;margin-top:.6rem;color:var(--text-tertiary)">然后打开 <strong style="color:var(--accent)">http://localhost:3456</strong> 即可解锁 QQ音乐和网易云加密文件并获取完整元信息。</p><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">关闭</button></div></div>';
   document.body.appendChild(o);
   o.addEventListener('click',function(e){if(e.target===o)o.remove()});
 }

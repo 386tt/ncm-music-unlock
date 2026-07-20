@@ -10,9 +10,16 @@
     "start": "node cli.js",
     "test": "node test.js"
   },
-  "keywords": ["ncm", "netease", "music", "unlock", "decrypt"],
+  "keywords": [
+    "ncm",
+    "netease",
+    "music",
+    "unlock",
+    "decrypt"
+  ],
   "license": "MIT",
   "dependencies": {
+    "@xhacker/qmcwasm": "^1.0.0",
     "music-metadata": "^7.14.0",
     "node-id3": "^0.2.6"
   }
