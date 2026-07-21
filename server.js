@@ -176,6 +176,11 @@ async function handleAPI(reqPath, res) {
                     result.publisher = album.company.trim();
                   }
 
+                  // 专辑艺术家（可能不同于曲目艺术家，如合辑）
+                  if (album.artists && album.artists.length > 0) {
+                    result.albumartist = album.artists.map(a => a.name).join('; ');
+                  }
+
                   // 发行年份（专辑的，更准确）
                   if (album.publishTime && !result.year) {
                     result.year = new Date(album.publishTime).getFullYear().toString();
@@ -394,7 +399,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  ╔═══════════════════════════════════╗');
-  console.log('  ║   音乐解锁 v2.3                  ║');
+  console.log('  ║   音乐解锁 v2.4                  ║');
   console.log('  ║   本地服务器已启动                ║');
   console.log('  ╚═══════════════════════════════════╝');
   console.log('');

@@ -666,6 +666,23 @@ function makeTextFrame(id, text, encoding){
 function toSynchInt(num){ return((num&0x7f)<<21)|((num&0x7f)<<14)|((num&0x7f)<<7)|(num&0x7f); }
 
 function writeID3v2Tags(audioData, tags){
+  // Strip existing ID3v2 tag from the beginning of audio data
+  // (decrypted audio often has original ID3 tags; we replace them entirely)
+  let rawAudio = audioData;
+  if (rawAudio.length > 10 &&
+      rawAudio[0] === 0x49 && rawAudio[1] === 0x44 && rawAudio[2] === 0x33) {
+    const ver = rawAudio[3];
+    let oldTagSize;
+    if (ver === 4 || ver === 3) {
+      // ID3v2.3 uses 4 bytes unsigned int; v2.4 uses synch-safe
+      oldTagSize = ver === 4
+        ? synchSafeToInt(rawAudio[6], rawAudio[7], rawAudio[8], rawAudio[9])
+        : ((rawAudio[6] << 21) | (rawAudio[7] << 14) | (rawAudio[8] << 7) | rawAudio[9]);
+      // Include the 10-byte header
+      rawAudio = rawAudio.slice(10 + oldTagSize);
+    }
+  }
+
   const enc = new TextEncoder();
   const frames = [];
 
@@ -726,7 +743,7 @@ function writeID3v2Tags(audioData, tags){
   header[3]=0x04; header[4]=0x00; header[5]=0x00;
   header.set(writeSynchSafe(totalSize),6);
 
-  const result = new Uint8Array(10+totalSize+audioData.length);
+  const result = new Uint8Array(10+totalSize+rawAudio.length);
   result.set(header,0);
   let off=10;
   for(const f of frames){
@@ -739,7 +756,7 @@ function writeID3v2Tags(audioData, tags){
   }
   // Padding
   for(let i=0;i<padLen;i++)result[off++]=0x00;
-  result.set(audioData,off);
+  result.set(rawAudio,off);
   return result;
 }
 
@@ -931,29 +948,61 @@ async function decryptQMC(rawData, filename, callbacks){
   const id3Tags = parseID3v2(audio);
   const fallback = parseFilename(filename);
 
-  const title = id3Tags?.title || fallback.title;
-  const artist = id3Tags?.artist || fallback.artist;
-  const album = id3Tags?.album || '';
+  // ---- Fetch online metadata via search API (QMC files lack embedded publisher/genre) ----
+  let onlineMeta = null;
+  const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (isLocalhost) {
+    const searchArtist = id3Tags?.artist || fallback.artist;
+    const searchTitle = id3Tags?.title || fallback.title;
+    const searchQuery = (searchArtist ? searchArtist + ' ' : '') + searchTitle;
+    if (searchQuery.trim().length > 3) {
+      try {
+        const resp = await fetch(
+          `${location.protocol}//${location.host}/api/search?q=${encodeURIComponent(searchQuery)}&provider=all`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          const all = [];
+          const order = { itunes: 0, netease: 1, musicbrainz: 2, qqmusic: 3 };
+          for (const p in data.results) {
+            if (data.results[p]) {
+              for (const item of data.results[p]) all.push(item);
+            }
+          }
+          all.sort((a, b) => (order[a.provider] || 99) - (order[b.provider] || 99));
+          if (all.length > 0) onlineMeta = all[0];
+        }
+      } catch (e) {
+        console.log('[QMC] 在线元数据获取失败:', e.message);
+      }
+    }
+  }
+
+  // Merge: onlineMeta > id3Tags > fallback
+  const title = onlineMeta?.title || id3Tags?.title || fallback.title;
+  const artist = onlineMeta?.artist || id3Tags?.artist || fallback.artist;
+  const album = onlineMeta?.album || id3Tags?.album || '';
 
   callbacks.onProgress && callbacks.onProgress(100);
 
   return {
     title, artist, artists: artist ? [[artist]] : [],
-    album, albumartist: id3Tags?.albumartist || artist,
-    year: id3Tags?.year || '',
-    genre: id3Tags?.genre || '',
-    track: id3Tags?.track || '',
-    disk: id3Tags?.disk || '',
-    composer: id3Tags?.composer || '',
-    publisher: id3Tags?.publisher || '',
+    album, albumartist: onlineMeta?.albumartist || id3Tags?.albumartist || artist,
+    year: onlineMeta?.year || id3Tags?.year || '',
+    genre: onlineMeta?.genre || id3Tags?.genre || '',
+    track: onlineMeta?.track || id3Tags?.track || '',
+    disk: onlineMeta?.disk || id3Tags?.disk || '',
+    composer: onlineMeta?.composer || id3Tags?.composer || '',
+    publisher: onlineMeta?.publisher || id3Tags?.publisher || '',
     copyright: id3Tags?.copyright || '',
-    comment: id3Tags?.comment || '',
-    isrc: id3Tags?.isrc || '',
+    comment: onlineMeta?.comment || id3Tags?.comment || '',
+    isrc: onlineMeta?.isrc || id3Tags?.isrc || '',
     bpm: id3Tags?.bpm || '',
     subType: '',
     format, mime: MIME_TYPES[format] || 'audio/mpeg',
-    audio, image: null, imageUrl: null,
-    rawMeta: { musicId: songId }, id3Tags, onlineMeta: null
+    audio, image: null, imageUrl: onlineMeta?.coverUrl || null,
+    rawMeta: { musicId: songId }, id3Tags, onlineMeta
   };
 }
 
@@ -1117,7 +1166,7 @@ async function decryptNCM(rawData,filename,callbacks={}){
   const artistStr=artists.map(a=>Array.isArray(a)?a[0]:a).filter(Boolean).join('; ');
 
   const album = onlineMeta?.album || oriMeta.album || id3Tags?.album || '';
-  const albumartist = id3Tags?.albumartist || artistStr;
+  const albumartist = onlineMeta?.albumartist || id3Tags?.albumartist || artistStr;
   const year = onlineMeta?.year || id3Tags?.year || '';
   const genre = onlineMeta?.genre || id3Tags?.genre || '';
   const track = onlineMeta?.track || id3Tags?.track || '';
@@ -1182,6 +1231,7 @@ function toggleDetail(idx){
 
 function renderResults(){
   const container=document.getElementById('results');
+  const isLocalhost=location.hostname==='localhost'||location.hostname==='127.0.0.1';
   container.innerHTML=results.map((r,i)=>{
     const coverHTML=r.imageUrl?'<img src="'+r.imageUrl+'" alt="封面" onerror="this.parentElement.innerHTML=\'<span class=no-cover>🎵</span>\'">':'<span class=no-cover>🎵</span>';
     let badgeHTML='';
@@ -1190,7 +1240,7 @@ function renderResults(){
     else badgeHTML='<span class="badge badge-success">'+r.format.toUpperCase()+'</span>';
     const sizeStr=r.status==='done'?formatSize(r.audio.length):'';
     const actionsHTML=r.status==='done'
-      ?'<button class="btn-dl" onclick="downloadResult('+i+')">⬇ 下载</button><button onclick="toggleDetail('+i+')">详情</button>'
+      ?'<button class="btn-dl" onclick="downloadResult('+i+')">⬇ 下载</button><button onclick="toggleDetail('+i+')">详情</button>'+(isLocalhost?'<button onclick="reSearch('+i+')" title="重新搜索在线元信息">🔍 元信息</button>':'')
       :r.status==='error'
         ?'<button onclick="removeResult('+i+')">✕ 移除</button>'
         :'';
@@ -1316,6 +1366,15 @@ async function autoSearch(idx){
   var r=results[idx];
   if(!r||r.status!=='done') return;
 
+  var query=(r.artist?r.artist+' ':'')+(r.title||r.filename);
+  showSearchModal(query, idx);
+}
+
+function reSearch(idx){
+  var r=results[idx];
+  if(!r||r.status!=='done') return;
+
+  // 用当前已设置的艺术家和标题作为搜索词
   var query=(r.artist?r.artist+' ':'')+(r.title||r.filename);
   showSearchModal(query, idx);
 }
