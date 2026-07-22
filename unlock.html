@@ -447,6 +447,16 @@ body {
 }
 .search-result-card .search-cover img { width: 100%; height: 100%; object-fit: cover; }
 .search-no-results { text-align: center; padding: 2rem; color: var(--text-tertiary); font-size: 0.9rem; }
+
+.search-pagination { display: flex; align-items: center; justify-content: center; gap: 0.35rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+.search-pagination button {
+  padding: 0.3rem 0.65rem; border: 1px solid rgba(128,128,128,0.2);
+  border-radius: var(--radius-sm); background: var(--bg-elevated);
+  color: var(--text-primary); font-size: 0.78rem; cursor: pointer;
+  transition: all 0.15s var(--ease-spring); min-width: 32px;
+}
+.search-pagination button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.search-pagination button.page-active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -474,7 +484,6 @@ body {
   <div class="toolbar" id="toolbar" style="display:none">
     <button class="primary" onclick="downloadAll()"> 全部下载</button>
     <button onclick="clearAll()"> 清空列表</button>
-    <button onclick="openSettings()"> 解密设定</button>
   </div>
 
   <div class="settings-notice" id="hostNotice" style="display:none">
@@ -487,7 +496,7 @@ body {
 </div>
 
 <div class="footer">
-  所有运算均在本地浏览器完成，文件不会上传 &middot; v2.4 NCM+QMC+元信息搜索 &middot;
+  所有运算均在本地浏览器完成，文件不会上传 &middot; v2.5 NCM+QMC+元信息搜索 &middot;
   <a href="https://git.unlock-music.dev/um/web" target="_blank">参考 unlock-music</a>
 </div>
 
@@ -957,8 +966,10 @@ async function decryptQMC(rawData, filename, callbacks){
     const searchQuery = (searchArtist ? searchArtist + ' ' : '') + searchTitle;
     if (searchQuery.trim().length > 3) {
       try {
+        // 将 artist 和 title 分开传递，让 MusicBrainz 可以做字段精确搜索
+        const params = 'artist=' + encodeURIComponent(searchArtist || '') + '&title=' + encodeURIComponent(searchTitle || '') + '&provider=all';
         const resp = await fetch(
-          `${location.protocol}//${location.host}/api/search?q=${encodeURIComponent(searchQuery)}&provider=all`,
+          `${location.protocol}//${location.host}/api/search?${params}`,
           { signal: AbortSignal.timeout(10000) }
         );
         if (resp.ok) {
@@ -1202,8 +1213,7 @@ async function decryptNCM(rawData,filename,callbacks={}){
 //  UI
 // ============================================================
 const results=[];
-let jooxUUID=localStorage.getItem('um_joox_uuid')||'';
-let _searchResults=[];  // 当前搜索结果缓存
+let _searchResults=[],_searchPage=0,_searchPageSize=5,_searchOverlay=null,_searchCardIdx=-1,_searchQuery='';
 
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.getElementById('toastWrap').appendChild(el);setTimeout(function(){el.remove()},3000)}
 
@@ -1229,11 +1239,23 @@ function toggleDetail(idx){
   renderResults();
 }
 
+function getProxiedCoverURL(url){
+  if(!url) return '';
+  var isLocalhost=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  if(!isLocalhost) return url;
+  // QQ Music CDN 和 Cover Art Archive 需要 Referer/User-Agent，走本地代理
+  if(url.indexOf('y.gtimg.cn')!==-1||url.indexOf('coverartarchive.org')!==-1){
+    return location.protocol+'//'+location.host+'/api/proxy/image?url='+encodeURIComponent(url);
+  }
+  return url;
+}
+
 function renderResults(){
   const container=document.getElementById('results');
   const isLocalhost=location.hostname==='localhost'||location.hostname==='127.0.0.1';
   container.innerHTML=results.map((r,i)=>{
-    const coverHTML=r.imageUrl?'<img src="'+r.imageUrl+'" alt="封面" onerror="this.parentElement.innerHTML=\'<span class=no-cover>🎵</span>\'">':'<span class=no-cover>🎵</span>';
+    var coverSrc=getProxiedCoverURL(r.imageUrl);
+    const coverHTML=coverSrc?'<img src="'+coverSrc+'" alt="封面" onerror="this.parentElement.innerHTML=\'<span class=no-cover>🎵</span>\'">':'<span class=no-cover>🎵</span>';
     let badgeHTML='';
     if(r.status==='working')badgeHTML='<span class="badge badge-working">解密中</span>';
     else if(r.status==='error')badgeHTML='<span class="badge badge-error">失败</span>';
@@ -1275,7 +1297,7 @@ function renderResults(){
   updateStatus();
 }
 
-async function processFile(file){
+async function processFile(file, batchSize){
   const idx=results.length;
   const entry={filename:file.name,title:file.name.replace(/\.[^.]+$/i,''),artist:'',album:'',albumartist:'',year:'',genre:'',track:'',disk:'',composer:'',publisher:'',copyright:'',comment:'',isrc:'',bpm:'',subType:'',format:'mp3',imageUrl:null,audio:null,image:null,status:'working'};
   const isQmc = isQmcFile(file.name);
@@ -1338,9 +1360,9 @@ async function processFile(file){
   renderResults();updateStatus();
   if(entry.status==='done'){
     toast('解锁成功: ' + entry.title, 'success');
-    // Auto-trigger metadata search
+    // Auto-trigger metadata search (仅单文件模式)
     var isLocalhost=location.hostname==='localhost'||location.hostname==='127.0.0.1';
-    if(isLocalhost){setTimeout(function(){autoSearch(idx)},500)}
+    if(isLocalhost&&(!batchSize||batchSize===1)){setTimeout(function(){autoSearch(idx)},500)}
   }
 }
 
@@ -1387,7 +1409,11 @@ async function showSearchModal(query, cardIdx){
 
   try{
     var apiBase=location.protocol+'//'+location.host;
-    var resp=await fetch(apiBase+'/api/search?q='+encodeURIComponent(query)+'&provider=all',{signal:AbortSignal.timeout(20000)});
+    // 将 artist 和 title 分开传递，让 MusicBrainz 可以做字段精确搜索
+    var searchArtist=r.artist||'';
+    var searchTitle=r.title||r.filename||'';
+    var searchParams='artist='+encodeURIComponent(searchArtist)+'&title='+encodeURIComponent(searchTitle)+'&provider=all';
+    var resp=await fetch(apiBase+'/api/search?'+searchParams,{signal:AbortSignal.timeout(20000)});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     var data=await resp.json();
     var allResults=[];
@@ -1407,7 +1433,7 @@ async function showSearchModal(query, cardIdx){
 }
 
 function renderSearchResults(overlay, allResults, cardIdx, query){
-  _searchResults=allResults;  // 缓存供 selectSearchResult 使用
+  _searchResults=allResults;_searchPage=0;_searchOverlay=overlay;_searchCardIdx=cardIdx;_searchQuery=query;
   var modal=overlay.querySelector('.modal');
 
   if(allResults.length===0){
@@ -1415,14 +1441,26 @@ function renderSearchResults(overlay, allResults, cardIdx, query){
     return;
   }
 
-  // Sort: itunes > netease > musicbrainz > qqmusic
   var order={itunes:0,netease:1,musicbrainz:2,qqmusic:3};
   allResults.sort(function(a,b){return(order[a.provider]||99)-(order[b.provider]||99)});
+  renderSearchPage();
+}
 
-  var html='<h3>🔍 搜索元信息</h3><p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.8rem">"'+query+'" — 找到 '+allResults.length+' 条结果</p>';
+function renderSearchPage(){
+  var modal=_searchOverlay.querySelector('.modal');
+  var totalPages=Math.ceil(_searchResults.length/_searchPageSize);
+  var start=_searchPage*_searchPageSize;
+  var end=Math.min(start+_searchPageSize,_searchResults.length);
+  var apiBase=location.protocol+'//'+location.host;
 
-  for(var i=0;i<Math.min(allResults.length,10);i++){
-    var r=allResults[i];
+  var html='<h3>🔍 搜索元信息</h3>';
+  html+='<p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.8rem">"'+_searchQuery+'" — 找到 '+_searchResults.length+' 条结果';
+  if(totalPages>1) html+='（第 '+(_searchPage+1)+'/'+totalPages+' 页）';
+  html+='</p>';
+  html+='<p style="color:var(--text-tertiary);font-size:.72rem;margin:-.4rem 0 .6rem;line-height:1.5">⚠ 由于网络原因，中国大陆地区可能无法正确获取 MusicBrainz 的数据</p>';
+
+  for(var i=start;i<end;i++){
+    var r=_searchResults[i];
     var provClass='provider-'+r.provider;
     var provName={itunes:'Apple Music',musicbrainz:'MusicBrainz',netease:'网易云音乐',qqmusic:'QQ音乐'}[r.provider]||r.provider;
     var details=[];
@@ -1430,13 +1468,35 @@ function renderSearchResults(overlay, allResults, cardIdx, query){
     if(r.album)details.push('「'+r.album+'」');
     if(r.genre)details.push(r.genre);
     if(r.isrc)details.push('ISRC:'+r.isrc);
-    var coverHTML=r.coverUrl?'<img src="'+r.coverUrl+'" onerror="this.style.display=\'none\'" loading="lazy">':'';
-    html+='<div class="search-result-card" onclick="selectSearchResult('+i+','+cardIdx+',this)" data-idx="'+i+'"><span class="provider-badge '+provClass+'">'+provName+'</span><div style="flex:1;min-width:0"><div class="search-title">'+r.title+' — '+r.artist+'</div><div class="search-detail">'+(details.join(' · ')||'「'+r.album+'」')+'</div></div>'+(coverHTML?'<div class="search-cover">'+coverHTML+'</div>':'')+'</div>';
+    // 封面走本地代理（MusicBrainz / QQ音乐需要 Referer/User-Agent）
+    var coverURL='';
+    if(r.coverUrl){
+      coverURL = (r.provider==='musicbrainz' || r.provider==='qqmusic')
+        ? apiBase+'/api/proxy/image?url='+encodeURIComponent(r.coverUrl)
+        : r.coverUrl;
+    }
+    var coverHTML=coverURL?'<img src="'+coverURL+'" onerror="this.style.display=\'none\'" loading="lazy">':'';
+    html+='<div class="search-result-card" onclick="selectSearchResult('+i+','+_searchCardIdx+',this)" data-idx="'+i+'"><span class="provider-badge '+provClass+'">'+provName+'</span><div style="flex:1;min-width:0"><div class="search-title">'+r.title+' — '+r.artist+'</div><div class="search-detail">'+(details.join(' · ')||'「'+r.album+'」')+'</div></div>'+(coverHTML?'<div class="search-cover">'+coverHTML+'</div>':'')+'</div>';
+  }
+
+  // 分页按钮
+  if(totalPages>1){
+    html+='<div class="search-pagination">';
+    if(_searchPage>0) html+='<button onclick="searchGoPage('+(_searchPage-1)+')">← 上一页</button>';
+    for(var p=0;p<totalPages;p++){
+      if(p===_searchPage) html+='<button class="page-active">'+(p+1)+'</button>';
+      else html+='<button onclick="searchGoPage('+p+')">'+(p+1)+'</button>';
+    }
+    if(_searchPage<totalPages-1) html+='<button onclick="searchGoPage('+(_searchPage+1)+')">下一页 →</button>';
+    html+='</div>';
   }
 
   html+='<div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">跳过</button></div>';
   modal.innerHTML=html;
+  modal.scrollTop=0;
 }
+
+function searchGoPage(page){_searchPage=page;renderSearchPage();}
 
 function selectSearchResult(resultIdx, cardIdx, el){
   var overlay=el.closest('.modal-overlay');
@@ -1520,14 +1580,6 @@ downloadResult=function(idx){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 };
 
-function openSettings(){
-  var overlay=document.createElement('div');overlay.className='modal-overlay';
-  overlay.innerHTML='<div class="modal"><h3>⚙ 解密设定</h3><label>JOOX UUID <small style="color:var(--text-tertiary)">（仅 JOOX 文件需要）</small></label><input type="text" id="jooxUUIDInput" value="'+jooxUUID+'" maxlength="32" placeholder="32位十六进制 UUID"><div class="tip">获取方式见 <a href="https://git.unlock-music.dev/um/joox-crypto/wiki/%E8%8E%B7%E5%8F%96%E8%AE%BE%E5%A4%87-UUID" target="_blank">Wiki</a></div><div class="btns"><button onclick="this.closest(\'.modal-overlay\').remove()">取消</button><button class="btn-ok" id="saveSettings">确定</button></div></div>';
-  document.body.appendChild(overlay);
-  document.getElementById('saveSettings').onclick=function(){jooxUUID=document.getElementById('jooxUUIDInput').value.trim();localStorage.setItem('um_joox_uuid',jooxUUID);overlay.remove();toast('设定已保存','success')};
-  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove()});
-}
-
 // ============================================================
 //  Events
 // ============================================================
@@ -1545,7 +1597,9 @@ function handleFiles(files){
     document.getElementById('hostNotice').style.display='flex';
   }
   toast('已添加 ' + encryptedFiles.length + ' 个文件', 'success');
-  for(var i=0;i<encryptedFiles.length;i++)processFile(encryptedFiles[i]);
+  // 多文件时不自动弹出元信息搜索窗口，仅单文件时弹出
+  var batchSize=encryptedFiles.length;
+  for(var i=0;i<encryptedFiles.length;i++)processFile(encryptedFiles[i],batchSize);
 }
 
 // ---- Detect if served from localhost or opened via file:// ----

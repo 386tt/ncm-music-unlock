@@ -161,9 +161,12 @@ function normalizeResult(provider, data) {
  * Rate limit: 1 req/sec
  */
 async function searchMusicBrainz(title, artist) {
+  // Build Lucene query: if artist is known, use field-specific search for accuracy;
+  // otherwise use a general text search so combined "artist title" strings still match.
+  const escapedTitle = title.replace(/"/g, '');
   const query = artist
-    ? `artist:"${artist.replace(/"/g, '')}" AND recording:"${title.replace(/"/g, '')}"`
-    : `recording:"${title.replace(/"/g, '')}"`;
+    ? `artist:"${artist.replace(/"/g, '')}" AND recording:"${escapedTitle}"`
+    : `"${escapedTitle}"`;  // general search across all fields
   const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&fmt=json&limit=10&inc=artist-rels+isrcs+genres+labels`;
 
   const res = await rateLimitedRequest(() => httpGet(url));
@@ -393,7 +396,10 @@ async function searchNetEase(title, artist) {
 
 /**
  * 搜索 QQ 音乐（best-effort，API 可能不稳定）
- * API: GET https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=...&p=1&n=10&format=json
+ * Step 1: GET /soso/fcgi-bin/client_search_cp — 搜索歌曲
+ * Step 2: GET /v8/fcg-bin/fcg_v8_album_info_cp.fcg — 获取专辑详情（genre, year, publisher）
+ * 封面 URL 格式：https://y.gtimg.cn/music/photo_new/T002R300x300M000{albumMid}.jpg
+ * 封面需要 Referer 头，由前端通过 /api/proxy/image 代理加载
  */
 async function searchQQMusic(title, artist) {
   const keyword = artist ? `${artist} ${title}` : title;
@@ -418,26 +424,99 @@ async function searchQQMusic(title, artist) {
   const songs = res.data.data.song.list.slice(0, 8);
   const results = [];
 
+  // 预取所有专辑信息（并行）
+  const albumCache = new Map();
+  const albumFetches = [];
+
+  for (const s of songs) {
+    const albumMid = s.albummid;
+    if (albumMid && !albumCache.has(albumMid)) {
+      albumCache.set(albumMid, null); // placeholder
+      albumFetches.push(
+        httpGet(
+          `https://c.y.qq.com/v8/fcg-bin/fcg_v8_album_info_cp.fcg?albummid=${albumMid}&format=json`,
+          { headers: { 'Referer': 'https://y.qq.com/' }, timeout: 5000 }
+        ).then(albumRes => {
+          if (albumRes.statusCode === 200 && albumRes.data && albumRes.data.code === 0 && albumRes.data.data) {
+            albumCache.set(albumMid, albumRes.data.data);
+          }
+        }).catch(() => {})
+      );
+    }
+  }
+
+  // 等待所有专辑请求完成（最多 5s）
+  await Promise.race([Promise.allSettled(albumFetches), new Promise(r => setTimeout(r, 5000))]);
+
   for (const s of songs) {
     try {
+      // QQ音乐搜索 API 返回扁平结构，字段名如下：
+      //   s.songname (标题)  s.songmid (歌曲mid)  s.songid (歌曲id)
+      //   s.albumname (专辑)  s.albummid (专辑mid)  s.albumid (专辑id)
+      //   s.singer[] (歌手)  s.pubtime (Unix秒)  s.belongCD (音轨)  s.cdIdx (碟号)
       const artistName = (s.singer || []).map(sg => sg.name).join(', ');
-      const albumName = s.album ? s.album.name : '';
+      const albumName = s.albumname || '';
+      const albumMid = s.albummid || '';
+      const songMid = s.songmid || '';
+      const songId = s.songid;
 
-      // Construct cover URL from album mid
+      // Construct cover URL (QQ Music 标准专辑封面)
       let coverUrl = '';
-      if (s.album && s.album.mid) {
-        coverUrl = `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg?max_age=2592000`;
+      if (albumMid) {
+        coverUrl = `https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg`;
       }
 
+      // 从专辑详情提取补充字段
+      let year = '', genre = '', publisher = '', trackNumber = '', diskNumber = '';
+      const albumData = albumCache.get(albumMid);
+      if (albumData) {
+        // 发行日期
+        if (albumData.aDate) {
+          year = albumData.aDate.substring(0, 4);
+        }
+        // 流派
+        if (albumData.genre) {
+          genre = typeof albumData.genre === 'string'
+            ? albumData.genre.trim()
+            : (Array.isArray(albumData.genre) ? albumData.genre.join(', ') : '');
+        }
+        // 发行方
+        if (albumData.company) {
+          publisher = albumData.company.trim();
+        }
+        // 音轨号 / 碟号（从专辑曲目列表中匹配当前歌曲）
+        if (albumData.list && Array.isArray(albumData.list)) {
+          for (const t of albumData.list) {
+            if (t.songmid === songMid || String(t.songid) === String(songId)) {
+              if (t.cdIdx !== undefined) diskNumber = String(t.cdIdx + 1);
+              if (t.belongCD !== undefined) trackNumber = String(t.belongCD);
+              break;
+            }
+          }
+        }
+      }
+
+      // 搜索结果中的 pubtime 兜底年份（Unix秒）
+      if (!year && s.pubtime) {
+        year = String(new Date(s.pubtime * 1000).getFullYear());
+      }
+
+      // 搜索结果中的音轨/碟号兜底
+      if (!trackNumber && s.belongCD !== undefined) trackNumber = String(s.belongCD);
+      if (!diskNumber && s.cdIdx !== undefined) diskNumber = String(s.cdIdx + 1);
+
       results.push(normalizeResult('qqmusic', {
-        title: s.name || s.title || '',
+        title: s.songname || '',
         artist: artistName,
         album: albumName,
-        year: '',
-        genre: '',
+        year,
+        genre,
+        track: trackNumber,
+        disk: diskNumber,
+        publisher,
         coverUrl,
-        providerId: s.mid || String(s.id || ''),
-        providerUrl: `https://y.qq.com/n/ryqq/songDetail/${s.mid}`,
+        providerId: songMid || String(songId || ''),
+        providerUrl: `https://y.qq.com/n/ryqq/songDetail/${songMid}`,
       }));
     } catch (e) {}
   }

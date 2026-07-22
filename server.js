@@ -50,7 +50,21 @@ function downloadImage(imageUrl) {
     const parsed = new URL(imageUrl);
     const client = parsed.protocol === 'https:' ? https : http;
 
-    client.get(imageUrl, { timeout: 15000 }, (res) => {
+    // 根据域名添加合适的 Referer 以绕过防盗链
+    let referer = '';
+    if (parsed.hostname.includes('y.gtimg.cn') || parsed.hostname.includes('y.qq.com')) {
+      referer = 'https://y.qq.com/';
+    } else if (parsed.hostname.includes('coverartarchive.org')) {
+      referer = 'https://musicbrainz.org/';
+    }
+
+    client.get(imageUrl, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'MusicUnlock/2.4 (metadata-enrichment; https://github.com/386tt/ncm-music-unlock)',
+        ...(referer ? { 'Referer': referer } : {}),
+      },
+    }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return downloadImage(res.headers.location).then(resolve).catch(reject);
       }
@@ -222,15 +236,21 @@ async function handleAPI(reqPath, res) {
       return;
     }
 
-    // GET /api/search?q=关键词&provider=all|musicbrainz|itunes|netease|qqmusic
+    // GET /api/search?q=关键词&artist=艺术家&title=歌曲名&provider=all|musicbrainz|itunes|netease|qqmusic
     if (reqPath.startsWith('/api/search')) {
       const parsed = url.parse(reqPath, true);
       const q = parsed.query.q || '';
+      const artist = parsed.query.artist || '';
+      const title = parsed.query.title || '';
       const provider = parsed.query.provider || 'all';
 
-      if (!q.trim()) {
+      // 优先用分开的 artist+title，否则用组合的 q
+      const searchTitle = title || q;
+      const searchArtist = artist || '';
+
+      if (!searchTitle.trim()) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: '缺少 q 参数（搜索关键词）' }));
+        res.end(JSON.stringify({ error: '缺少 q/artist/title 参数（搜索关键词）' }));
         return;
       }
 
@@ -238,9 +258,9 @@ async function handleAPI(reqPath, res) {
       let results;
 
       if (provider === 'all') {
-        results = await searchAll(q);
+        results = await searchAll(searchTitle, searchArtist);
       } else {
-        const items = await searchByProvider(provider, q);
+        const items = await searchByProvider(provider, searchTitle, searchArtist);
         results = { [provider]: items };
       }
 
@@ -399,7 +419,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  ╔═══════════════════════════════════╗');
-  console.log('  ║   音乐解锁 v2.4                  ║');
+  console.log('  ║   音乐解锁 v2.5                  ║');
   console.log('  ║   本地服务器已启动                ║');
   console.log('  ╚═══════════════════════════════════╝');
   console.log('');
@@ -408,8 +428,8 @@ server.listen(PORT, () => {
   console.log('  支持功能：');
   console.log('  - 拖拽 .ncm 文件解锁（网易云音乐）');
   console.log('  - 拖拽 .qmc* / .mflac / .mgg 文件解锁（QQ 音乐）');
-  console.log('  - 自动获取网易云完整元数据');
-  console.log('    （流派、年份、发行方、作曲者 等）');
+  console.log('  - 多平台元信息搜索与补全');
+  console.log('    （Apple Music / MusicBrainz / 网易云 / QQ音乐）');
   console.log('  - 元数据写回 MP3/FLAC 文件');
   console.log('');
   console.log('  按 Ctrl+C 停止服务器');
